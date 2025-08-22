@@ -26,11 +26,11 @@ function setupGradesHeaders_(sh, settings) {
   // Base columns that are typed-in by the teacher
   const baseHeaders = ['Name', 'Email', 'Skill', 'Mastery Grade'];
 
-  // Utility columns per level: Streak + String + Symbols
+  // Utility columns per level: Streak + String + Mastery (display-only)
   const utilHeaders = settings.codes.flatMap((_, i) => [
     `${settings.names[i]} Streak`,
     `${settings.names[i]} String`,
-    `${settings.names[i]} Symbols`,
+    `${settings.names[i]}`,
   ]);
 
   // Attempt columns per level: repeat short code per defaultAttempts[i]
@@ -73,7 +73,7 @@ function setupGradesFormulas_(sh, settings, ctx) {
     // Map symbol chars in attempt cells to mastery bits using Symbols table
     const stringFormula =
       `=TEXTJOIN("",TRUE,ARRAYFORMULA(` +
-      `XLOOKUP(FILTER(${attemptRowA1}, REGEXMATCH(${attemptHeaderA1}, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, "-")` +
+      `XLOOKUP(FILTER(${attemptRowA1}, REGEXMATCH(${attemptHeaderA1}, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, "0")` +
       `))`;
     sh.getRange(2, stringCol).setFormula(stringFormula);
 
@@ -138,28 +138,25 @@ function columnA1(n) {
 function applyGradesFormatting_(sh, settings, ctx) {
   const ss = sh.getParent();
 
-  // Hide the computing columns (String and Streak)
-  const utilCols = settings.codes.length * 3;
-  if (utilCols > 0) sh.hideColumns(ctx.firstUtilCol, utilCols);
+  // Hide the computing columns (Streak and String) but leave Mastery visible
+  if (settings.codes.length > 0) {
+    settings.codes.forEach((_, i) => {
+      const streakCol = ctx.firstUtilCol + i * 3; // Streak
+      sh.hideColumns(streakCol, 2); // hide Streak and String
+    });
+  }
 
-  // Mark computed columns (Mastery Grade + util) with a subtle fill and protection (warning only)
+  // Mark computed columns (Mastery Grade + util) with a subtle fill
   const computedBg = '#f5f5f5';
-  const gradeRange = sh.getRange(1, 4, Math.max(2, sh.getMaxRows() - 0), 1).setBackground(computedBg);
-  if (utilCols > 0) {
-    const utilRange = sh.getRange(1, ctx.firstUtilCol, Math.max(2, sh.getMaxRows() - 0), utilCols).setBackground(computedBg);
-    try {
-      const pUtil = utilRange.protect();
-      pUtil.setWarningOnly(true);
-    } catch (e) {
-      console && console.warn && console.warn('Protection (util) warning', e);
-    }
-  }
-  try {
-    const pGrade = gradeRange.protect();
-    pGrade.setWarningOnly(true);
-  } catch (e) {
-    console && console.warn && console.warn('Protection (grade) warning', e);
-  }
+  sh.getRange(1, 4, Math.max(2, sh.getMaxRows() - 0), 1).setBackground(computedBg);
+  // Apply background per level for both hidden Streak/String and visible Mastery
+  settings.codes.forEach((_, i) => {
+    const streakCol = ctx.firstUtilCol + i * 3;
+    const symbolsCol = streakCol + 2;
+    const rows = Math.max(2, sh.getMaxRows() - 0);
+    sh.getRange(1, streakCol, rows, 2).setBackground(computedBg);
+    sh.getRange(1, symbolsCol, rows, 1).setBackground(computedBg);
+  });
 
   // Attempt columns: restrict input to entries in SymbolChars named range and keep as text
   if (ctx.firstAttemptCol <= ctx.lastCol) {
@@ -170,6 +167,9 @@ function applyGradesFormatting_(sh, settings, ctx) {
       sh.getRange(2, ctx.firstAttemptCol, sh.getMaxRows() - 1, attemptsWidth).setDataValidation(rule);
     }
     sh.getRange(1, ctx.firstAttemptCol, sh.getMaxRows(), attemptsWidth).setNumberFormat('@STRING@');
+    // Make dropdown columns compact and centered
+    sh.setColumnWidths(ctx.firstAttemptCol, attemptsWidth, 48);
+    sh.getRange(1, ctx.firstAttemptCol, sh.getMaxRows(), attemptsWidth).setHorizontalAlignment('center');
   }
 
   // Header bold for readability
