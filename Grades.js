@@ -94,7 +94,7 @@ function setupGradesFormulas_(sh, settings, ctx) {
   const noneCorrectCheck = `ISERROR(SEARCH("1", TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => columnA1(firstUtilCol + i * 3 + 1) + '2').join(',')}} )))`;
   const parts = settings.codes
     .map((_, i) => ({
-  cond: `${columnA1(firstUtilCol + i * 3)}2>=INDEX(${RANGE_LEVEL_STREAK},${i + 1})`,
+      cond: `${columnA1(firstUtilCol + i * 3)}2>=INDEX(${RANGE_LEVEL_STREAK},${i + 1})`,
       val: `INDEX(${RANGE_LEVEL_SCORES},${i + 1})`,
     }))
     .reverse(); // evaluate highest first
