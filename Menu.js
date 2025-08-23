@@ -6,19 +6,32 @@ writePostSetupInstructions */
 /**
  * Adds a custom menu to the spreadsheet.
  */
+
+const MENU = {
+  TITLE: 'Standards-Based Grading',
+  SETUP: 'Initial setup',
+  REGENERATE_INSTRUCTIONS: 'Regenerate Instructions',
+  SETUP_GRADE_SHEET: 'Setup Grade Sheet',
+  REFORMAT_GRADES: 'Reformat Grades (no content)',
+  ADD_STUDENTS_AND_SKILLS: 'Add Students & Skills',
+  SETUP_GRADE_VIEW: 'Setup Grade View',
+  GENERATE_STUDENT_VIEWS: 'Generate student views',
+  SHARE_STUDENT_VIEWS: 'Share student views'
+}
+
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('Standards-Based Grading')
-    .addItem('Initial setup', 'doInitialSetup')
-    .addItem('Regenerate Instructions', 'writePostSetupInstructions') // dev only
+  ui.createMenu(MENU.TITLE)
+    .addItem(MENU.SETUP, 'doInitialSetup')
+    .addItem(MENU.REGENERATE_INSTRUCTIONS, 'writePostSetupInstructions') // dev only
     .addSeparator()
-    .addItem('Setup Grade Sheet', 'setupGradeSheet')
-    .addItem('Reformat Grades (no content)', 'reformatGradesSheet')
-    .addItem('Add Students & Skills', 'addStudentsAndSkills')
-    .addItem('Setup Grade View', 'setupGradeViewSheet')
+    .addItem(MENU.SETUP_GRADE_SHEET, 'setupGradeSheet')
+    .addItem(MENU.REFORMAT_GRADES, 'reformatGradesSheet')
+    .addItem(MENU.ADD_STUDENTS_AND_SKILLS, 'addStudentsAndSkills')
+    .addItem(MENU.SETUP_GRADE_VIEW, 'setupGradeViewSheet')
     .addSeparator()
-    .addItem('Generate student views', 'generateStudentViews')
-    .addItem('Share student views', 'shareStudentViews')
+    .addItem(MENU.GENERATE_STUDENT_VIEWS, 'generateStudentViews')
+    .addItem(MENU.SHARE_STUDENT_VIEWS, 'shareStudentViews')
     .addToUi();
 }
 
