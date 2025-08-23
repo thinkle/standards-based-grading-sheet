@@ -150,3 +150,26 @@ function htmlFragmentToRichText_(frag) {
   }
   return builder.build();
 }
+
+function getCellUrl(range, local = true) {
+  // Get a Rich Text URL for referring to the current range
+  const sheet = range.getSheet();
+  const sheetId = sheet.getSheetId();
+  const rangeA1 = range.getA1Notation();
+  let hashUrl = `#gid=${sheetId}&amp;range=${rangeA1}`;
+  if (local) {
+    return hashUrl;
+  } else {
+    return `https://docs.google.com/spreadsheets/d/${SpreadsheetApp.getActiveSpreadsheet().getId()}/edit${hashUrl}`;
+  }
+}
+
+function getSheetUrl(sheet, local = true) {
+  // Get a Rich Text URL for referring to the current sheet
+  const sheetId = sheet.getSheetId();
+  if (local) {
+    return `#gid=${sheetId}`;
+  } else {
+    return `https://docs.google.com/spreadsheets/d/${SpreadsheetApp.getActiveSpreadsheet().getId()}/edit#gid=${sheetId}`;
+  }
+}

@@ -1,3 +1,16 @@
+/* eslint-disable no-unused-vars */
+/* global getCellUrl, setRichInstructions, SpreadsheetApp */
+/* exported writePostSetupInstructions */
+
+const blurbs = {
+  'TOC': 'A1',
+  'About': 'A2',
+  'Setup': 'A3',
+  'StudentsAndStandards': 'A4',
+  'Gradebook': 'A5',
+  'Sharing': 'A6'
+}
+
 function writePostSetupInstructions() {
   const ss = SpreadsheetApp.getActive();
   let sheet = ss.getSheetByName('Instructions');
@@ -7,9 +20,17 @@ function writePostSetupInstructions() {
 
   // Overview and Quick Start
   setRichInstructions(
-    sheet.getRange('A1'),
+    sheet.getRange(blurbs['TOC']),
     `<h1>Standards-Based Grading Sheet - Complete Guide</h1>
-    <h2>About This Tool</h2>
+    <p>This guide walks you through setting up and using your standards-based gradebook in four key stages:</p>
+    <li><b><a href="${getCellUrl(sheet.getRange(blurbs['Setup']))}">Stage 1:</a></b> Initial Setup - Configuring levels and mastery definitions</li>
+    <li><b><a href="${getCellUrl(sheet.getRange(blurbs['StudentsAndStandards']))}">Stage 2:</a></b> Students and Standards - Adding your roster and skills</li>
+    <li><b><a href="${getCellUrl(sheet.getRange(blurbs['Gradebook']))}">Stage 3:</a></b> Using the Gradebook - Daily grading and management</li>
+    <li><b><a href="${getCellUrl(sheet.getRange(blurbs['Sharing']))}">Stage 4:</a></b> Sharing and Communication - Student and family views</li>
+    `);
+  setRichInstructions(
+    sheet.getRange(blurbs['About']),
+    `<h2>About This Tool</h2>
     <p>
     <i>This standards-based grading system was inspired by <a href="https://sites.google.com/brzmath.com/btcrubric">the BTC Rubric from Tim Brzenzinski et al</a>.</i>
     <small>BTC stands for "Building Thinking Classrooms", a book by Peter Liljedahl.</small>
@@ -22,19 +43,13 @@ function writePostSetupInstructions() {
     <li>3. Real-time feedback: give students a "live" view of information rather than requiring reports to be generated.</li>
     <li>4. Flexibility: we don't hard-code things like the number of assessments you need, the number of tries you need for something
     to count as mastery, or how mastery indicators tally up into a final "score" used for a gradebook -- all of this is left configurable
-    for teacher use.</li>
-
-    This guide walks you through setting up and using your standards-based gradebook in four key stages:</p>
-    <li><b>Stage 1:</b> Initial Setup - Configuring levels and mastery definitions</li>
-    <li><b>Stage 2:</b> Students and Standards - Adding your roster and skills</li>
-    <li><b>Stage 3:</b> Using the Gradebook - Daily grading and management</li>
-    <li><b>Stage 4:</b> Sharing and Communication - Student and family views</li>
+    for teacher use.</li>    
     `
   );
 
   // Stage 1: Initial Setup
   setRichInstructions(
-    sheet.getRange('A2'),
+    sheet.getRange(blurbs['Setup']),
     `<h2>Stage 1: Initial Setup</h2>
     <h3>Understanding the System</h3>
     <p>This standards-based grading system works by having students demonstrate mastery through multiple attempts at different skill levels. Students need to achieve a "streak" of successful attempts to show true mastery.</p>
@@ -85,7 +100,7 @@ function writePostSetupInstructions() {
 
   // Stage 2: Students and Standards
   setRichInstructions(
-    sheet.getRange('A3'),
+    sheet.getRange(blurbs['StudentsAndStandards']),
     `<h2>Stage 2: Setting up Students and Standards</h2>
     
     <h3>Adding Students</h3>
@@ -95,7 +110,7 @@ function writePostSetupInstructions() {
     
     <h4>Important Notes:</h4>
     <li>Include student emails if you plan to share live views with students or families</li>
-    <li>You can add students at any time - just run "Add Students & Skills" from the menu to update the gradebook</li>
+    <li>You can add students at any time - just run "Add Students &amp; Skills" from the menu to update the gradebook</li>
     <li>Student order will be preserved in the gradebook and student views</li>
     
     <h3>Defining Skills and Standards</h3>
@@ -113,14 +128,14 @@ function writePostSetupInstructions() {
     <h3>Building the Gradebook Structure</h3>
     <p>Once students and skills are defined:</p>
     <li>Run <b>Standards-Based Grading → Setup Grade Sheet</b> to create the gradebook structure</li>
-    <li>Run <b>Standards-Based Grading → Add Students & Skills</b> to populate all student × skill combinations</li>
+    <li>Run <b>Standards-Based Grading → Add Students &amp; Skills</b> to populate all student × skill combinations</li>
     <p>This creates one row for each student-skill combination, allowing individual tracking of progress on every standard.</p>
     `
   );
 
   // Stage 3: Using the Gradebook
   setRichInstructions(
-    sheet.getRange('A4'),
+    sheet.getRange(blurbs['Gradebook']),
     `<h2>Stage 3: Using as a Gradebook</h2>
     
     <h3>Understanding the Gradebook Layout</h3>
@@ -160,7 +175,7 @@ function writePostSetupInstructions() {
     <p>As your class evolves:</p>
     <li>Add new students to the <b>Students</b> sheet</li>
     <li>Add new skills to the <b>Skills</b> sheet</li>
-    <li>Run <b>Standards-Based Grading → Add Students & Skills</b> to update the gradebook</li>
+    <li>Run <b>Standards-Based Grading → Add Students &amp; Skills</b> to update the gradebook</li>
     <li>The system will automatically add missing student × skill combinations without duplicating existing data</li>
     
     <h3>Updating and Maintenance</h3>
@@ -172,7 +187,7 @@ function writePostSetupInstructions() {
 
   // Stage 4: Sharing and Communication
   setRichInstructions(
-    sheet.getRange('A5'),
+    sheet.getRange(blurbs['Sharing']),
     `<h2>Stage 4: Sharing and Communication</h2>
     
     <h3>Understanding Student Views</h3>

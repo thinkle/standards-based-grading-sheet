@@ -1,6 +1,7 @@
 /* eslint-disable no-unused-vars */
 /* exported onOpen, doInitialSetup, setupGradeSheet, addStudentsAndSkills, reformatGradesOnly */
-/* global SpreadsheetApp, setupNamedRanges, setupStudents, setupSkills, setupGradesSheet, populateGrades, reformatGradesOnly */
+/* global SpreadsheetApp, setupNamedRanges, setupStudents, setupSkills, setupGradesSheet, populateGrades, reformatGradesOnly,
+writePostSetupInstructions */
 
 /**
  * Adds a custom menu to the spreadsheet.
@@ -9,6 +10,7 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Standards-Based Grading')
     .addItem('Initial setup', 'doInitialSetup')
+    .addItem('Regenerate Instructions', 'writePostSetupInstructions') // dev only
     .addSeparator()
     .addItem('Setup Grade Sheet', 'setupGradeSheet')
     .addItem('Reformat Grades (no content)', 'reformatGradesSheet')
@@ -30,6 +32,7 @@ function doInitialSetup() {
   // Source sheets
   setupStudents();
   setupSkills();
+  writePostSetupInstructions();
   ss.toast('Initial setup complete.', 'Standards-Based Grading', 3);
 }
 
