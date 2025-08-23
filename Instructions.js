@@ -4,12 +4,27 @@ function writePostSetupInstructions() {
   if (!sheet) {
     sheet = ss.insertSheet('Instructions');
   }
-  
+
   // Overview and Quick Start
   setRichInstructions(
     sheet.getRange('A1'),
     `<h1>Standards-Based Grading Sheet - Complete Guide</h1>
-    <p>This standards-based grading system was inspired by educational research and teacher feedback on effective assessment practices. This guide walks you through setting up and using your standards-based gradebook in four key stages:</p>
+    <h2>About This Tool</h2>
+    <p>
+    <i>This standards-based grading system was inspired by <a href="https://sites.google.com/brzmath.com/btcrubric">the BTC Rubric from Tim Brzenzinski et al</a>.</i>
+    <small>BTC stands for "Building Thinking Classrooms", a book by Peter Liljedahl.</small>
+    </p>
+    <p>If you are familiar with that tool, you will see this tool uses the same grading philosophy and approach, but makes
+    the following improvements:</p>
+    <li>1. Easier typing of grades (typable symbols instead of a drop-down menu of checks)</li>
+    <li>2. No tab-based management: enter all grades in one view that you can sort by skill or by student rather than clicking through
+    one tab per student.</li>
+    <li>3. Real-time feedback: give students a "live" view of information rather than requiring reports to be generated.</li>
+    <li>4. Flexibility: we don't hard-code things like the number of assessments you need, the number of tries you need for something
+    to count as mastery, or how mastery indicators tally up into a final "score" used for a gradebook -- all of this is left configurable
+    for teacher use.</li>
+
+    This guide walks you through setting up and using your standards-based gradebook in four key stages:</p>
     <li><b>Stage 1:</b> Initial Setup - Configuring levels and mastery definitions</li>
     <li><b>Stage 2:</b> Students and Standards - Adding your roster and skills</li>
     <li><b>Stage 3:</b> Using the Gradebook - Daily grading and management</li>

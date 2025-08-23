@@ -103,6 +103,8 @@ function setupSymbols() {
   // seed rows if empty
   if (sh.getLastRow() < 2) {
     sh.getRange(2, 1, 8, 3).setValues([
+      // Add symbols: this taxonomy comes
+      // from BTC (see https://sites.google.com/brzmath.com/btcrubric)
       ['1', 1, '✓'],
       ['1o', 1, '✓o'],
       ['1s', 1, '✓s'],
