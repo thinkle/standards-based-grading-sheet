@@ -38,7 +38,7 @@ const STYLE = {
         BG: '#fff1e6',        // very light peach
         BG_ALT: '#ffeadb',     // stripe alt
         BG_BRIGHT: '#ffd7ba',  // toned-down action
-       BG_BRIGHT_ALT: '#ffcca8',
+        BG_BRIGHT_ALT: '#ffcca8',
         TEXT: '#000000',
         TEXT_BRIGHT: '#000000'
       },

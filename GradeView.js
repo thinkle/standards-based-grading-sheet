@@ -113,12 +113,7 @@ function setupGradeViewSheet(studentName) {
   for (let i = 0; i < levelNames.length; i++) {
     sh.setColumnWidth(5 + i, 180);
   }
-  // Banding for the table region (large height to cover dynamic rows)
-  try {
-    sh.getRange(tableHeaderRow, 1, 2000, tableHeaders.length).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, true, false);
-  } catch (e) {
-    if (console && console.warn) console.warn('Banding apply warning', e);
-  }
+  // We'll apply custom color striping and gradient rules instead of generic banding.
 
   // Alignments for readability
   const dataRowsGV = Math.max(1, sh.getMaxRows() - subHeaderRow);
@@ -159,7 +154,106 @@ function setupGradeViewSheet(studentName) {
   sh.setColumnWidth(10, 120); // J
   sh.setColumnWidth(11, 90);  // K
 
-  // Legacy alignment block retained for compatibility; main alignment handled above
+  // Color application: neutral stripes, per-level attempts stripes, mastery gradient
+  try {
+    const neutralBg = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_BG) || '#f7f7f7';
+    const neutralBgAlt = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_BG_ALT) || '#f0f0f0';
+    const neutralText = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_TEXT) || '#333333';
+    const dataStart = subHeaderRow + 1;
+    const dataCount = Math.max(1, sh.getMaxRows() - subHeaderRow);
+    // Base neutral background for Unit, Skill #, Description (A..C)
+    sh.getRange(dataStart, 1, dataCount, 3).setBackground(neutralBg).setFontColor(neutralText);
+
+    // Build conditional formatting rules, filtering out duplicates for target ranges
+    let rules = sh.getConditionalFormatRules();
+    const targetA1s = [];
+
+    // Neutral stripe on even data rows for A..C
+    const neutralRange = sh.getRange(dataStart, 1, dataCount, 3);
+    targetA1s.push(neutralRange.getA1Notation());
+    const neutralStripe = SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=ISEVEN(ROW())')
+      .setBackground(neutralBgAlt)
+      .setRanges([neutralRange])
+      .build();
+
+    // Per-level attempts columns start at column 5
+    const attemptsStartCol = 5;
+    const attemptRules = [];
+    for (let i = 0; i < levelNames.length; i++) {
+      const col = attemptsStartCol + i;
+      const levelIdx = i + 1; // levels are 1-based in STYLE
+      const levelDef = (STYLE && STYLE.COLORS && STYLE.COLORS.LEVELS && STYLE.COLORS.LEVELS[levelIdx]) || {};
+      const baseBg = levelDef.BG || neutralBg;
+      const baseText = levelDef.TEXT || '#000000';
+      const altBg = levelDef.BG_ALT || baseBg;
+      // Base background for data area
+      sh.getRange(dataStart, col, dataCount, 1).setBackground(baseBg).setFontColor(baseText);
+      // Stripe rule on even rows
+      const r = sh.getRange(dataStart, col, dataCount, 1);
+      targetA1s.push(r.getA1Notation());
+      const stripe = SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=ISEVEN(ROW())')
+        .setBackground(altBg)
+        .setRanges([r])
+        .build();
+      attemptRules.push(stripe);
+    }
+
+    // Mastery Grade gradient on column 4
+    const gradeCol = 4;
+    const gradeRange = sh.getRange(dataStart, gradeCol, dataCount, 1);
+    targetA1s.push(gradeRange.getA1Notation());
+    const minColor = STYLE.COLORS.GRADE_SCALE.MIN;
+    const midColor = STYLE.COLORS.GRADE_SCALE.MID;
+    const maxColor = STYLE.COLORS.GRADE_SCALE.MAX;
+    const textOnScale = STYLE.COLORS.GRADE_SCALE.TEXT;
+    let maxScore = 1;
+    try {
+      const lvl = ss.getRangeByName(RANGE_LEVEL_SCORES);
+      if (lvl) {
+        const nums = lvl.getValues().flat().map(v => Number(v)).filter(v => !isNaN(v));
+        if (nums.length) maxScore = Math.max.apply(null, nums);
+      }
+    } catch (e) { /* default */ }
+    let minScore = 0;
+    try {
+      const none = ss.getRangeByName(RANGE_NONE_CORRECT_SCORE);
+      if (none) {
+        const n = Number(none.getValue());
+        if (!isNaN(n)) minScore = n;
+      }
+    } catch (e) { /* default */ }
+    let midScore = null;
+    try {
+      const some = ss.getRangeByName(RANGE_SOME_CORRECT_SCORE);
+      if (some) {
+        const m = Number(some.getValue());
+        if (!isNaN(m)) midScore = m;
+      }
+    } catch (e) { /* optional */ }
+    let gradientBuilder = SpreadsheetApp.newConditionalFormatRule()
+      .setGradientMinpointWithValue(minColor, SpreadsheetApp.InterpolationType.NUMBER, String(minScore));
+    if (midScore !== null && midColor) {
+      gradientBuilder = gradientBuilder.setGradientMidpointWithValue(midColor, SpreadsheetApp.InterpolationType.NUMBER, String(midScore));
+    }
+    const gradeGradient = gradientBuilder
+      .setGradientMaxpointWithValue(maxColor, SpreadsheetApp.InterpolationType.NUMBER, String(maxScore))
+      .setRanges([gradeRange])
+      .build();
+    const gradeText = SpreadsheetApp.newConditionalFormatRule()
+      .whenCellNotEmpty()
+      .setFontColor(textOnScale)
+      .setRanges([gradeRange])
+      .build();
+
+    // De-duplicate rules for our target ranges
+    rules = rules.filter(r => !r.getRanges().some(rg => targetA1s.includes(rg.getA1Notation())));
+    rules.push(neutralStripe, ...attemptRules, gradeGradient, gradeText);
+    sh.setConditionalFormatRules(rules);
+  } catch (e) {
+    if (console && console.warn) console.warn('Grade View color rules warn', e);
+  }
 }
 
 // Make a safe sheet name from an arbitrary string (strip forbidden chars, trim length)

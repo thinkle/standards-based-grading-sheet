@@ -138,8 +138,6 @@ function extractFileIdFromUrl_(url) {
  */
 function formatExternalViewSheet_(sh) {
   if (!sh) return;
-  // Header banding across first ~2000 rows and up to, say, 12 columns
-  try { sh.getRange(1, 1, 2000, Math.min(sh.getMaxColumns(), 12)).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, true, false); } catch (e) { if (console && console.warn) console.warn('External banding warn', e); }
   // Set widths roughly matching Grade View
   sh.setColumnWidth(1, 90);  // Unit
   sh.setColumnWidth(2, 70);  // Skill #
@@ -152,6 +150,56 @@ function formatExternalViewSheet_(sh) {
   sh.getRange(3, 2, maxRows, 1).setHorizontalAlignment('center');
   sh.getRange(3, 4, maxRows, Math.max(1, Math.min(9, sh.getMaxColumns()) - 3)).setHorizontalAlignment('center');
   sh.getRange(3, 3, maxRows, 1).setWrap(true);
+
+  // Apply subtle colors and striping similar to Grade View (best-effort; IMPORTRANGE blocks direct cell background copy)
+  try {
+    const neutralBg = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_BG) || '#f7f7f7';
+    const neutralBgAlt = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_BG_ALT) || '#f0f0f0';
+    const neutralText = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_TEXT) || '#333333';
+    // Data area starts at row 3 (headers are 1 and 2)
+    const dataStart = 3;
+    const dataCount = Math.max(1, sh.getMaxRows() - 2);
+    // Neutral stripe on A..C
+    sh.getRange(dataStart, 1, dataCount, 3).setBackground(neutralBg).setFontColor(neutralText);
+    let rules = sh.getConditionalFormatRules();
+    const targets = [];
+    const neutralRange = sh.getRange(dataStart, 1, dataCount, 3);
+    targets.push(neutralRange.getA1Notation());
+    const neutralStripe = SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=ISEVEN(ROW())')
+      .setBackground(neutralBgAlt)
+      .setRanges([neutralRange])
+      .build();
+    // Attempts columns 5.. up to present
+    const maxCols = Math.min(12, sh.getMaxColumns());
+    for (let col = 5; col <= maxCols; col++) {
+      // Use subtle neutral family since STYLE.LEVELS may not map here reliably through IMPORTRANGE
+      const r = sh.getRange(dataStart, col, dataCount, 1);
+      r.setBackground(neutralBg).setFontColor(neutralText);
+      targets.push(r.getA1Notation());
+      const stripe = SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=ISEVEN(ROW())')
+        .setBackground(neutralBgAlt)
+        .setRanges([r])
+        .build();
+      rules.push(stripe);
+    }
+    // Gradient-like readability for Grade column (we cannot safely replicate exact thresholds without named ranges here)
+    // So we just ensure white text for any non-empty cell in column 4 for contrast if a theme applies
+    const gradeRange = sh.getRange(dataStart, 4, dataCount, 1);
+    targets.push(gradeRange.getA1Notation());
+    const gradeText = SpreadsheetApp.newConditionalFormatRule()
+      .whenCellNotEmpty()
+      .setFontColor((STYLE && STYLE.COLORS && STYLE.COLORS.GRADE_SCALE && STYLE.COLORS.GRADE_SCALE.TEXT) || '#ffffff')
+      .setRanges([gradeRange])
+      .build();
+    // Dedup existing rules for these targets
+    rules = rules.filter(r => !r.getRanges().some(rg => targets.includes(rg.getA1Notation())));
+    rules.push(neutralStripe, gradeText);
+    sh.setConditionalFormatRules(rules);
+  } catch (e) {
+    if (console && console.warn) console.warn('formatExternalViewSheet_ colors warn', e);
+  }
 }
 
 /**
@@ -220,5 +268,7 @@ function ensureChildViewFromSource_(childSS, srcTab, parentUrl, tabName) {
   // Set IMPORTRANGE at A1 to bring in live data
   const importFormula = `=IMPORTRANGE("${parentUrl}", "${tabName}!A1:G")`;
   copied.getRange('A1').setFormula(importFormula);
+  // Apply best-effort formatting to the external sheet
+  try { formatExternalViewSheet_(copied); } catch (e) { if (console && console.warn) console.warn('format external after import warn', e); }
   return copied;
 }
