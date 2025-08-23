@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 /* exported generateStudentViews, shareStudentViews */
-/* global SpreadsheetApp, DriveApp, Session, setupGradeViewSheet, RANGE_STUDENT_NAMES, RANGE_STUDENT_EMAILS, safeSheetName_ */
+/* global SpreadsheetApp, DriveApp, Session, STYLE, setupGradeViewSheet, RANGE_STUDENT_NAMES, RANGE_STUDENT_EMAILS, safeSheetName_ */
 
 /**
  * Step 1: Generate per-student tabs AND external view docs (no sharing yet).
@@ -61,8 +61,15 @@ function generateStudentViews() {
   const idxName = 'Student Views';
   let idx = ss.getSheetByName(idxName) || ss.insertSheet(idxName);
   idx.clear();
+  // Default fonts
+  try {
+    idx.getRange(1, 1, Math.max(1, idx.getMaxRows()), Math.max(1, idx.getMaxColumns()))
+      .setFontFamily(STYLE.FONT_FAMILY)
+      .setFontSize(Number(STYLE.FONT_SIZE));
+  } catch (e) { /* STYLE optional */ }
   idx.getRange('A1').setValue('List of student view links: give students/families READ or COMMENT ACCESS only. Do NOT grant edit access or they can potentially see the grades of peers. Open a view once to authorize IMPORTRANGE. You can share from the menu.');
-  idx.getRange('A1:C1').merge().setFontWeight('bold').setBackground('#fff3cd').setWrap(true);
+  const warnBg = (typeof STYLE !== 'undefined' && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.WARNING_BG) || '#fff3cd';
+  idx.getRange('A1:C1').merge().setFontWeight('bold').setBackground(warnBg).setWrap(true);
   idx.getRange(2, 1, 1, 3).setValues([['Name', 'Email', 'View URL']]).setFontWeight('bold');
   if (results.length) idx.getRange(3, 1, results.length, 3).setValues(results.map(r => [r.name, r.email, r.url]));
   idx.setFrozenRows(2);

@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 /* exported setupGradesSheet, populateGrades, reformatGradesSheet */
-/* global SpreadsheetApp,
+/* global SpreadsheetApp, STYLE,
           RANGE_SYMBOL_CHARS, RANGE_SYMBOL_MASTERY, RANGE_SYMBOL_SYMBOL,
           RANGE_LEVEL_STREAK, RANGE_LEVEL_SCORES, RANGE_NONE_CORRECT_SCORE, RANGE_SOME_CORRECT_SCORE,
           RANGE_LEVEL_SHORTCODES, RANGE_LEVEL_NAMES, RANGE_LEVEL_DEFAULTATTEMPTS,
@@ -20,9 +20,14 @@ function setupGradesSheet() {
   const ctx = setupGradesHeaders_(sh, settings); // (1) headers
   setupGradesFormulas_(sh, settings, ctx);       // (2) formulas
 
-  // Basic sheet niceties (frozen header + autoresize)
+  // Basic sheet niceties (frozen header + autoresize + fonts)
   sh.setFrozenRows(1);
   sh.autoResizeColumns(1, ctx.headers.length);
+  try {
+    sh.getRange(1, 1, Math.max(1, sh.getMaxRows()), Math.max(1, sh.getMaxColumns()))
+      .setFontFamily(STYLE.FONT_FAMILY)
+      .setFontSize(Number(STYLE.FONT_SIZE));
+  } catch (e) { /* STYLE may not be defined in some contexts; ignore */ }
 
   // Light formatting and validation
   applyGradesFormatting_(sh, settings, ctx);
@@ -201,15 +206,24 @@ function applyGradesFormatting_(sh, settings, ctx) {
     });
   }
 
-  // Mark computed columns (Mastery Grade + util) with a subtle fill
-  sh.getRange(1, 4, Math.max(2, sh.getMaxRows() - 0), 1).setBackground('#f5f5f5');
+  // Mark computed columns (Mastery Grade + util) with a subtle fill and readable text
+  const neutralBg = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_BG) || '#f5f5f5';
+  const neutralText = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_TEXT) || '#333333';
+  sh.getRange(1, 4, Math.max(2, sh.getMaxRows() - 0), 1).setBackground(neutralBg).setFontColor(neutralText);
   // Apply background per level for both hidden Streak/String and visible Mastery
   settings.codes.forEach((_, i) => {
     const streakCol = ctx.firstUtilCol + i * 3;
     const symbolsCol = streakCol + 2;
     const rows = Math.max(2, sh.getMaxRows() - 0);
-    sh.getRange(1, streakCol, rows, 2).setBackground('#f5f5f5');
-    sh.getRange(1, symbolsCol, rows, 1).setBackground('#f5f5f5');
+    sh.getRange(1, streakCol, rows, 2).setBackground(neutralBg);
+    // Visible per-level REFLECTION column (Symbols) uses regular level BG.
+    // Map by header name to level index to avoid mismatch if order changes.
+    const headerName = sh.getRange(1, symbolsCol).getValue();
+    const levelIdx = settings.names.findIndex(n => n && headerName && String(headerName).startsWith(n));
+    const level = levelIdx >= 0 ? (levelIdx + 1) : (i + 1);
+    const levelBg = (STYLE && STYLE.COLORS && STYLE.COLORS.LEVELS[level] && STYLE.COLORS.LEVELS[level].BG) || neutralBg;
+    const levelText = (STYLE && STYLE.COLORS && STYLE.COLORS.LEVELS[level] && STYLE.COLORS.LEVELS[level].TEXT) || '#000000';
+    sh.getRange(1, symbolsCol, rows, 1).setBackground(levelBg).setFontColor(levelText);
   });
 
   // Fixed base widths (A..F): Name, Email, Unit, Skill #, Description, Mastery Grade
@@ -232,26 +246,89 @@ function applyGradesFormatting_(sh, settings, ctx) {
     }
     sh.getRange(1, ctx.firstAttemptCol, sh.getMaxRows(), attemptsWidth).setNumberFormat('@STRING@');
 
-    // Color palette low -> med -> adv (cycles if >3 levels)
-    const palette = ['#fff7d6', '#e8f4ff', '#f1e8ff'];
     let col = ctx.firstAttemptCol;
     settings.defaultAttempts.forEach((cntRaw, levelIdx) => {
       const cnt = Number(cntRaw || 0);
       if (cnt > 0) {
-        const color = palette[levelIdx % palette.length];
+        // Determine level index from attempt headers (e.g., B1...). Use the first column's header to map.
+        const headerVal = sh.getRange(1, col).getValue();
+        const code = (headerVal && String(headerVal).trim()) ? String(headerVal).trim().charAt(0) : '';
+        const levelFromCode = settings.codes.findIndex(c => String(c).toUpperCase() === code.toUpperCase());
+        const level = levelFromCode >= 0 ? (levelFromCode + 1) : (levelIdx + 1);
+        const levelBgBright = (STYLE && STYLE.COLORS && STYLE.COLORS.LEVELS[level] && STYLE.COLORS.LEVELS[level].BG_BRIGHT) || '#fff7d6';
+        const levelTextBright = (STYLE && STYLE.COLORS && STYLE.COLORS.LEVELS[level] && STYLE.COLORS.LEVELS[level].TEXT_BRIGHT) || '#000000';
         // Narrow width and center align
         sh.setColumnWidths(col, cnt, 34);
         sh.getRange(1, col, sh.getMaxRows(), cnt).setHorizontalAlignment('center');
-        // Highlight the whole attempt area for this level
-        sh.getRange(1, col, Math.max(2, sh.getMaxRows()), cnt).setBackground(color);
+        // Highlight the whole attempt area for this level (ACTION area)
+        sh.getRange(1, col, Math.max(2, sh.getMaxRows()), cnt).setBackground(levelBgBright).setFontColor(levelTextBright);
         col += cnt;
       }
     });
   }
 
-  // Header bold for readability
+  // Header bold for readability and header background
   const headerCols = ctx.headers && ctx.headers.length ? ctx.headers.length : ctx.lastCol;
-  sh.getRange(1, 1, 1, headerCols).setFontWeight('bold');
+  const headerBg = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.HEADER_BG) || '#f0f3f5';
+  const headerText = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.HEADER_TEXT) || '#000000';
+  sh.getRange(1, 1, 1, headerCols).setFontWeight('bold').setBackground(headerBg).setFontColor(headerText);
+
+  // Conditional formatting for Mastery Grade column using GRADE_SCALE
+  try {
+    const minColor = STYLE.COLORS.GRADE_SCALE.MIN; // background low color
+    const midColor = STYLE.COLORS.GRADE_SCALE.MID; // midpoint color
+    const maxColor = STYLE.COLORS.GRADE_SCALE.MAX; // background high color
+    const textOnScale = STYLE.COLORS.GRADE_SCALE.TEXT; // foreground text color
+    const gradeCol = ctx.masteryCol;
+    const dataRange = sh.getRange(2, gradeCol, Math.max(1, sh.getMaxRows() - 1), 1);
+    const rules = sh.getConditionalFormatRules();
+    // Remove old rules targeting Mastery Grade to avoid duplicates
+    const dataA1 = dataRange.getA1Notation();
+    const filtered = rules.filter(r => !r.getRanges().some(rg => rg.getA1Notation() === dataA1));
+    // Determine thresholds: min = NoneCorrectScore, max from LevelScores
+    let maxScore = 1;
+    try {
+      const lvl = sh.getParent().getRangeByName(RANGE_LEVEL_SCORES);
+      if (lvl) {
+        const nums = lvl.getValues().flat().map(v => Number(v)).filter(v => !isNaN(v));
+        if (nums.length) maxScore = Math.max.apply(null, nums);
+      }
+    } catch (e) { /* default to 1 */ }
+    let minScore = 0;
+    try {
+      const none = sh.getParent().getRangeByName(RANGE_NONE_CORRECT_SCORE);
+      if (none) {
+        const n = Number(none.getValue());
+        if (!isNaN(n)) minScore = n;
+      }
+    } catch (e) { /* default to 0 */ }
+    let midScore = null;
+    try {
+      const some = sh.getParent().getRangeByName(RANGE_SOME_CORRECT_SCORE);
+      if (some) {
+        const m = Number(some.getValue());
+        if (!isNaN(m)) midScore = m;
+      }
+    } catch (e) { /* optional */ }
+    // Background gradient scale (built-in) anchored at minScore..maxScore
+    let gradientBuilder = SpreadsheetApp.newConditionalFormatRule()
+      .setGradientMinpointWithValue(minColor, SpreadsheetApp.InterpolationType.NUMBER, String(minScore));
+    if (midScore !== null && midColor) {
+      gradientBuilder = gradientBuilder.setGradientMidpointWithValue(midColor, SpreadsheetApp.InterpolationType.NUMBER, String(midScore));
+    }
+    const gradient = gradientBuilder
+      .setGradientMaxpointWithValue(maxColor, SpreadsheetApp.InterpolationType.NUMBER, String(maxScore))
+      .setRanges([dataRange])
+      .build();
+    // Foreground text on the gradient
+    const textColorRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenCellNotEmpty()
+      .setFontColor(textOnScale)
+      .setRanges([dataRange])
+      .build();
+    filtered.push(gradient, textColorRule);
+    sh.setConditionalFormatRules(filtered);
+  } catch (e) { /* STYLE or method may be unavailable; skip gracefully */ }
 }
 
 /**
@@ -271,7 +348,10 @@ function reformatGradesSheet() {
     lastCol: Math.max(layout.lastCol, sh.getLastColumn()),
     masteryCol: layout.masteryCol,
   };
+  // 1) Re-apply formatting, colors, and data validation
   applyGradesFormatting_(sh, settings, ctx);
+  // 2) Re-apply all computed formulas across existing data rows
+  fillComputedFormulas_(sh, settings, layout);
 }
 
 

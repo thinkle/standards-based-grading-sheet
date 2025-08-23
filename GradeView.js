@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-/* global SpreadsheetApp,
+/* global SpreadsheetApp, STYLE,
           RANGE_STUDENT_NAMES, RANGE_STUDENT_EMAILS,
           RANGE_LEVEL_NAMES, RANGE_LEVEL_STREAK, RANGE_LEVEL_SCORES,
           RANGE_NONE_CORRECT_SCORE, RANGE_SOME_CORRECT_SCORE */
@@ -17,6 +17,12 @@ function setupGradeViewSheet(studentName) {
   const sheetName = studentName ? safeSheetName_(studentName) : SHEET_GRADE_VIEW;
   let sh = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
   sh.clear();
+  // Global fonts
+  try {
+    sh.getRange(1, 1, Math.max(1, sh.getMaxRows()), Math.max(1, sh.getMaxColumns()))
+      .setFontFamily(STYLE.FONT_FAMILY)
+      .setFontSize(Number(STYLE.FONT_SIZE));
+  } catch (e) { /* STYLE optional */ }
 
   // Read settings arrays
   const levelNames = ss.getRangeByName(RANGE_LEVEL_NAMES).getValues().flat().filter(String);
@@ -31,7 +37,9 @@ function setupGradeViewSheet(studentName) {
 
   // Title
   sh.getRange('A1:G1').merge();
-  sh.getRange('A1').setValue('Standards Based Grades').setFontSize(18).setFontWeight('bold').setHorizontalAlignment('left');
+  const brandPrimary = (STYLE && STYLE.COLORS && STYLE.COLORS.BRAND_PRIMARY) || '#0033a0';
+  const headerBg = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.HEADER_BG) || '#f0f3f5';
+  sh.getRange('A1').setValue('Standards Based Grades').setFontSize(Number(STYLE.FONT_SIZE_XLARGE || 18)).setFontWeight('bold').setHorizontalAlignment('left').setFontColor(brandPrimary);
 
   // Student selector (merge A2:B2 for label, C2:G2 for dropdown or fixed name)
   sh.getRange('A2:B2').merge();
@@ -39,14 +47,15 @@ function setupGradeViewSheet(studentName) {
   sh.getRange('C2:G2').merge();
   const selCell = sh.getRange('C2');
   const namesRange = ss.getRangeByName(RANGE_STUDENT_NAMES);
+  const inputBg = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.INPUT_HIGHLIGHT) || '#fffbe6';
   if (studentName) {
-    selCell.setValue(studentName).setFontSize(12).setHorizontalAlignment('left').setBackground('#fffbe6');
+    selCell.setValue(studentName).setFontSize(12).setHorizontalAlignment('left').setBackground(inputBg);
   } else {
     if (namesRange) {
       const rule = SpreadsheetApp.newDataValidation().requireValueInRange(namesRange, true).setAllowInvalid(false).build();
       selCell.setDataValidation(rule);
     }
-    selCell.setFontSize(12).setHorizontalAlignment('left').setBackground('#fffbe6');
+    selCell.setFontSize(12).setHorizontalAlignment('left').setBackground(inputBg);
   }
   // The dropdown spans C2:G2; widths set later below
 
@@ -61,7 +70,7 @@ function setupGradeViewSheet(studentName) {
   // Table headers
   const tableHeaderRow = row;
   const tableHeaders = ['Unit', 'Skill #', 'Skill Description', 'Grade', ...levelNames.map(n => `${n} Attempts`)];
-  sh.getRange(tableHeaderRow, 1, 1, tableHeaders.length).setValues([tableHeaders]).setFontWeight('bold').setBackground('#f0f3f5');
+  sh.getRange(tableHeaderRow, 1, 1, tableHeaders.length).setValues([tableHeaders]).setFontWeight('bold').setBackground(headerBg);
 
   // Subheader row: put descriptions where they go
   const subHeaderRow = tableHeaderRow + 1;
@@ -132,7 +141,7 @@ function setupGradeViewSheet(studentName) {
 
   // Optional: Unit summary to the right (I:K)
   sh.getRange('I4').setValue('Unit Summary').setFontWeight('bold');
-  sh.getRange('I5:K5').setValues([['Unit', 'Average Grade', 'Skills']]).setFontWeight('bold').setBackground('#f0f3f5');
+  sh.getRange('I5:K5').setValues([['Unit', 'Average Grade', 'Skills']]).setFontWeight('bold').setBackground(headerBg);
   // Unit summary: average only numeric grades (ignore non-numeric like "-")
   sh.getRange('I6').setFormula(`=IF($Z$2="","",
     QUERY(

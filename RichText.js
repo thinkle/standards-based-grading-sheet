@@ -1,36 +1,26 @@
+/* eslint-disable no-unused-vars */
+/* exported setRichInstructions, getCellUrl, getSheetUrl, escapeBareAmpersands_ */
+/* global SpreadsheetApp, XmlService, STYLE */
 /** --------- STYLE SYSTEM (edit to taste) --------- */
-const COLOR_PRIMARY = '#0033a0';
-const COLOR_SECONDARY = '#464646';
-function styleBase_() {
-  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setFontSize(11).build();
-}
-function styleH1_() {
-  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(18).setForegroundColor(COLOR_PRIMARY).build();
-}
-function styleH2_() {
-  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(15).setForegroundColor(COLOR_PRIMARY).build();
-}
-function styleH3_() {
-  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(13).setForegroundColor(COLOR_SECONDARY).build();
-}
-function styleH4_() {
-  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(11).setForegroundColor(COLOR_PRIMARY).build();
-}
-function styleH5_() {
-  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(11).setForegroundColor(COLOR_SECONDARY).build();
-}
-function styleH6_() {
-  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(10).setForegroundColor(COLOR_SECONDARY).build();
-}
-function styleLI_() {
-  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setFontSize(11).build();
-}
+const COLOR_PRIMARY = (typeof STYLE !== 'undefined' && STYLE.COLORS && STYLE.COLORS.BRAND_PRIMARY) ? STYLE.COLORS.BRAND_PRIMARY : '#0033a0';
+const COLOR_SECONDARY = (typeof STYLE !== 'undefined' && STYLE.COLORS && STYLE.COLORS.BRAND_SECONDARY) ? STYLE.COLORS.BRAND_SECONDARY : '#464646';
+const FONT_FAMILY = (typeof STYLE !== 'undefined' && STYLE.FONT_FAMILY) ? STYLE.FONT_FAMILY : 'Roboto';
+const FONT_SIZE = (typeof STYLE !== 'undefined' && STYLE.FONT_SIZE) ? Number(STYLE.FONT_SIZE) : 11;
+const FONT_SIZE_XL = (typeof STYLE !== 'undefined' && STYLE.FONT_SIZE_XLARGE) ? Number(STYLE.FONT_SIZE_XLARGE) : 18;
+const FONT_SIZE_LG = (typeof STYLE !== 'undefined' && STYLE.FONT_SIZE_LARGE) ? Number(STYLE.FONT_SIZE_LARGE) : 15;
+const FONT_SIZE_SM = (typeof STYLE !== 'undefined' && STYLE.FONT_SIZE_SMALL) ? Number(STYLE.FONT_SIZE_SMALL) : 8;
+function styleBase_() { return SpreadsheetApp.newTextStyle().setFontFamily(FONT_FAMILY).setFontSize(FONT_SIZE).build(); }
+function styleH1_() { return SpreadsheetApp.newTextStyle().setFontFamily(FONT_FAMILY).setBold(true).setFontSize(FONT_SIZE_XL).setForegroundColor(COLOR_PRIMARY).build(); }
+function styleH2_() { return SpreadsheetApp.newTextStyle().setFontFamily(FONT_FAMILY).setBold(true).setFontSize(FONT_SIZE_LG).setForegroundColor(COLOR_PRIMARY).build(); }
+function styleH3_() { return SpreadsheetApp.newTextStyle().setFontFamily(FONT_FAMILY).setBold(true).setFontSize(13).setForegroundColor(COLOR_SECONDARY).build(); }
+function styleH4_() { return SpreadsheetApp.newTextStyle().setFontFamily(FONT_FAMILY).setBold(true).setFontSize(FONT_SIZE).setForegroundColor(COLOR_PRIMARY).build(); }
+function styleH5_() { return SpreadsheetApp.newTextStyle().setFontFamily(FONT_FAMILY).setBold(true).setFontSize(FONT_SIZE).setForegroundColor(COLOR_SECONDARY).build(); }
+function styleH6_() { return SpreadsheetApp.newTextStyle().setFontFamily(FONT_FAMILY).setBold(true).setFontSize(10).setForegroundColor(COLOR_SECONDARY).build(); }
+function styleLI_() { return SpreadsheetApp.newTextStyle().setFontFamily(FONT_FAMILY).setFontSize(FONT_SIZE).build(); }
 function styleBold_() { return SpreadsheetApp.newTextStyle().setBold(true).build(); }
 function styleItalic_() { return SpreadsheetApp.newTextStyle().setItalic(true).build(); }
 function styleUnder_() { return SpreadsheetApp.newTextStyle().setUnderline(true).build(); }
-function styleSmall_() {
-  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setFontSize(8).build();
-}
+function styleSmall_() { return SpreadsheetApp.newTextStyle().setFontFamily(FONT_FAMILY).setFontSize(FONT_SIZE_SM).build(); }
 
 /** Merge multiple TextStyles into one by re-applying props (simple overlay). */
 function mergeStyles_() {
