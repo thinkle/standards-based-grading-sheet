@@ -67,6 +67,34 @@ function setupGradesHeaders_(sh, settings) {
 }
 
 /* -------------------- (2) FORMULAS -------------------- */
+/**
+ * Populate the computed formulas in the Grades sheet.
+ *
+ * Why the “look at the header” pattern?
+ * - Teachers may add more attempt columns at any time (e.g., insert 5 more columns for level "B").
+ * - We label attempt headers with a short level prefix (like B1, B2, …) and then, per data row,
+ *   we dynamically FILTER only the attempt cells whose header begins with that prefix.
+ * - To make this robust with Google Sheets’ new Table views (sorting, Group by), we avoid hard-coded
+ *   references to row 1 and instead derive the header vector relative to the current row using
+ *   ROW()-based OFFSET/INDEX. We also scan out to ZZ so newly added attempt columns are automatically
+ *   discovered by the formulas.
+ *
+ * How do we compute “streaks” from symbol entries?
+ * - Each attempt cell contains a symbol (✓, ✗, etc.). Settings define a Symbols table mapping
+ *   each symbol to a mastery bit (1 for proficient/correct, 0 otherwise) and a display string.
+ * - For each level on a row we:
+ *   1) Look up each attempt symbol’s mastery bit via XLOOKUP and TEXTJOIN them into a bitstring
+ *      like "011101" (String column).
+ *   2) Compute the longest consecutive run of 1s via MAX(LEN(SPLIT(bitstring, "0"))). Splitting on 0s
+ *      yields only the 1-runs; taking their lengths and MAX gives the streak length.
+ *
+ * Mastery Grade logic (summary):
+ * - If a row has no attempts, return "-".
+ * - Otherwise, evaluate levels from highest to lowest; the highest level whose required streak
+ *   threshold is met determines the grade.
+ * - If no correct attempts exist anywhere on the row, emit the configured "none correct" score.
+ *   Otherwise emit the configured "some correct" score.
+ */
 function setupGradesFormulas_(sh, settings, ctx) {
   const { firstUtilCol, firstAttemptCol, lastCol } = ctx;
 
@@ -84,7 +112,9 @@ function setupGradesFormulas_(sh, settings, ctx) {
     const stringCol = streakCol + 1;
     const symbolsCol = streakCol + 2;
 
-    // Map symbol chars in attempt cells to mastery bits using Symbols table
+    // Map symbol chars in attempt cells to mastery bits using the Symbols table.
+    // We FILTER the current row of attempt values by headers matching this level’s prefix (e.g., "^B").
+    // Then XLOOKUP the symbols to their mastery bits and TEXTJOIN into a bitstring for streak analysis.
     const stringFormula =
       `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},` +
       `TEXTJOIN("",TRUE,ARRAYFORMULA(` +
@@ -92,12 +122,14 @@ function setupGradesFormulas_(sh, settings, ctx) {
       `)))`;
     sh.getRange(2, stringCol).setFormula(stringFormula);
 
-    // Longest run of 1s in the per-level string
+    // Longest run of 1s in the per-level string. We split on 0 (treating 0 as a divider),
+    // measure each run’s length, and take the maximum. Empty string -> no streak.
     const stringCellA1 = `${columnA1(stringCol)}2`;
     const streakFormula = `=IF(${stringCellA1}="","",MAX(ARRAYFORMULA(LEN(SPLIT(${stringCellA1},"0",FALSE,FALSE)))))`;
     sh.getRange(2, streakCol).setFormula(streakFormula);
 
-    // Symbols: join pretty symbols corresponding to attempts for this level
+    // Symbols: join the display symbols (e.g., ✓ ✗) corresponding to attempts for this level
+    // to provide a compact visual summary in the utility area.
     const symbolsFormula =
       `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},` +
       `TEXTJOIN("",TRUE,ARRAYFORMULA(` +
@@ -107,12 +139,14 @@ function setupGradesFormulas_(sh, settings, ctx) {
   });
 
   // Mastery Grade formula (highest level whose streak threshold is met wins)
+  // noneCorrectCheck: detect if there are zero "1" bits across all per-level String columns for this row.
   const noneCorrectCheck = `ISERROR(SEARCH("1", TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
     const strCol = columnA1(firstUtilCol + i * 3 + 1);
     return `INDEX(${strCol}:${strCol},ROW())`;
   }).join(',')}} )))`;
   const parts = settings.codes
     .map((_, i) => ({
+      // Compare this row’s streak for the level against that level’s required streak threshold.
       cond: `INDEX(${columnA1(firstUtilCol + i * 3)}:${columnA1(firstUtilCol + i * 3)},ROW())>=INDEX(${RANGE_LEVEL_STREAK},${i + 1})`,
       val: `INDEX(${RANGE_LEVEL_SCORES},${i + 1})`,
     }))
@@ -120,8 +154,10 @@ function setupGradesFormulas_(sh, settings, ctx) {
 
   const ifs =
     `=IFS(` +
+    // No attempts on this row -> show "-" to indicate ungraded.
     `COUNTA(${rowValsGeneric})=0,"-",` +
     parts.map(p => `${p.cond},${p.val}`).join(',') + (parts.length ? ',' : '') +
+    // If no "1" anywhere, emit the configured "none correct" score; otherwise fall back to "some correct".
     `${noneCorrectCheck},${RANGE_NONE_CORRECT_SCORE},` +
     `TRUE,${RANGE_SOME_CORRECT_SCORE}` +
     `)`;
@@ -328,7 +364,12 @@ function computeGradesLayoutFromSettings_(settings) {
   return { firstUtilCol, firstAttemptCol, lastCol, masteryCol };
 }
 
-/** Fill formulas for columns: Mastery Grade, Streak/String/Mastery for each level, across all rows. */
+/** Fill formulas for columns: Mastery Grade, Streak/String/Mastery for each level, across all rows.
+ * This mirrors the logic of setupGradesFormulas_ but writes row-agnostic formulas for an entire range.
+ * Notes:
+ * - We use the same ROW()-relative header/row derivations so formulas stay correct under sorting/Table views.
+ * - Attempt scans extend to ZZ so newly inserted attempt columns are included automatically.
+ */
 function fillComputedFormulas_(sh, settings, layout) {
   const { firstUtilCol, firstAttemptCol, lastCol } = layout;
   const startRow = 2;
@@ -344,6 +385,7 @@ function fillComputedFormulas_(sh, settings, layout) {
   // Mastery Grade formulas for all rows
   const masteryCol = layout.masteryCol;
   const masteryFormulas = new Array(rowCount);
+  // noneCorrectCheck: same concept as above, but expressed generically for a filled range.
   const noneCorrectCheckGeneric = `ISERROR(SEARCH("1", TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
     const strCol = columnA1(firstUtilCol + i * 3 + 1);
     return `INDEX(${strCol}:${strCol},ROW())`;
@@ -369,6 +411,10 @@ function fillComputedFormulas_(sh, settings, layout) {
     const symbolsArr = new Array(rowCount);
     const stringColLetter = columnA1(stringCol);
     const stringCellGeneric = `INDEX(${stringColLetter}:${stringColLetter},ROW())`;
+    // Generic formulas used for each row of the filled ranges:
+    // - stringFormula: collect mastery bits for this level across attempts on the row
+    // - streakFormula: longest run of 1s
+    // - symbolsFormula: pretty symbol string for display
     const stringFormulaGeneric = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0))))`;
     const streakFormulaGeneric = `=IF(${stringCellGeneric}="","",MAX(ARRAYFORMULA(LEN(SPLIT(${stringCellGeneric},"0",FALSE,FALSE)))))`;
     const symbolsFormulaGeneric = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-"))))`;
