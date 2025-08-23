@@ -12,9 +12,10 @@ const SHEET_GRADE_VIEW = 'Grade View';
  * - Explanations for each level and fallback rules
  * - Sorted table of Unit, Skill #, Description, Mastery Grade, and per-level symbol strings
  */
-function setupGradeViewSheet() {
+function setupGradeViewSheet(studentName) {
   const ss = SpreadsheetApp.getActive();
-  let sh = ss.getSheetByName(SHEET_GRADE_VIEW) || ss.insertSheet(SHEET_GRADE_VIEW);
+  const sheetName = studentName ? safeSheetName_(studentName) : SHEET_GRADE_VIEW;
+  let sh = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
   sh.clear();
 
   // Read settings arrays
@@ -29,55 +30,72 @@ function setupGradeViewSheet() {
   const symbolCols = levelNames.map((_, i) => firstUtilCol + i * 3 + 2); // per-level symbols column in Grades
 
   // Title
-  sh.getRange('A1').setValue('Grade View').setFontSize(18).setFontWeight('bold');
+  sh.getRange('A1:G1').merge();
+  sh.getRange('A1').setValue('Standards Based Grades').setFontSize(18).setFontWeight('bold').setHorizontalAlignment('left');
 
-  // Student selector
-  sh.getRange('A2').setValue('Student').setFontWeight('bold');
-  const selCell = sh.getRange('B2');
+  // Student selector (merge A2:B2 for label, C2:G2 for dropdown or fixed name)
+  sh.getRange('A2:B2').merge();
+  sh.getRange('A2').setValue('Student').setFontWeight('bold').setHorizontalAlignment('right');
+  sh.getRange('C2:G2').merge();
+  const selCell = sh.getRange('C2');
   const namesRange = ss.getRangeByName(RANGE_STUDENT_NAMES);
-  if (namesRange) {
-    const rule = SpreadsheetApp.newDataValidation().requireValueInRange(namesRange, true).setAllowInvalid(false).build();
-    selCell.setDataValidation(rule);
+  if (studentName) {
+    selCell.setValue(studentName).setFontSize(12).setHorizontalAlignment('left').setBackground('#fffbe6');
+  } else {
+    if (namesRange) {
+      const rule = SpreadsheetApp.newDataValidation().requireValueInRange(namesRange, true).setAllowInvalid(false).build();
+      selCell.setDataValidation(rule);
+    }
+    selCell.setFontSize(12).setHorizontalAlignment('left').setBackground('#fffbe6');
   }
-  selCell.setFontSize(12).setHorizontalAlignment('left').setBackground('#fffbe6');
-  sh.setColumnWidth(2, 240); // B: student dropdown width
+  // The dropdown spans C2:G2; widths set later below
 
-  // Hidden helper: selected email from name
-  // =IF(B2="","",INDEX(StudentEmails, MATCH(B2, StudentNames, 0)))
-  sh.getRange('C2').setFormula(`=IF($B$2="","",INDEX(${RANGE_STUDENT_EMAILS}, MATCH($B$2, ${RANGE_STUDENT_NAMES}, 0)))`);
-  sh.hideColumns(3);
+  // Hidden helper: selected email from name (place outside visible table area)
+  // =IF(C2="","",INDEX(StudentEmails, MATCH(C2, StudentNames, 0)))
+  sh.getRange('Z2').setFormula(`=IF($C$2="","",INDEX(${RANGE_STUDENT_EMAILS}, MATCH($C$2, ${RANGE_STUDENT_NAMES}, 0)))`);
+  sh.hideColumns(26);
 
-  // Explanations header and lines
+  // Spacer before table
   let row = 4;
-  sh.getRange(row, 1).setValue('What mastery means').setFontWeight('bold');
-  row++;
-  levelNames.forEach((name, i) => {
-    const line = `${name}: To master this level and score a ${levelScores[i]}, you must earn credit ${levelStreak[i]} times in a row.`;
-    sh.getRange(row++, 1).setValue(line);
-  });
-  // Fallback rules line using named ranges so it stays dynamic
-  sh.getRange(row++, 1).setFormula(`="If no correct attempts, score is "&${RANGE_NONE_CORRECT_SCORE}&". If at least one correct, score is "&${RANGE_SOME_CORRECT_SCORE}&"."`);
-
-  row += 1; // spacer before table
 
   // Table headers
   const tableHeaderRow = row;
-  const tableHeaders = ['Unit', 'Skill #', 'Skill Description', 'Mastery Grade', ...levelNames.map(n => `${n} Attempts`)];
+  const tableHeaders = ['Unit', 'Skill #', 'Skill Description', 'Grade', ...levelNames.map(n => `${n} Attempts`)];
   sh.getRange(tableHeaderRow, 1, 1, tableHeaders.length).setValues([tableHeaders]).setFontWeight('bold').setBackground('#f0f3f5');
 
+  // Subheader row: put descriptions where they go
+  const subHeaderRow = tableHeaderRow + 1;
+  // Mastery Grade column: conditional fallback description only when relevant to selected student
+  const masteryDescFormula = `=IF($Z$2="","",
+    TRIM(
+      IF(COUNTIF(FILTER(INDEX(Grades!A2:ZZ,,${masteryCol}), Grades!B2:B=$Z$2), ${RANGE_NONE_CORRECT_SCORE})>0,
+         "If no correct attempts, score is "&${RANGE_NONE_CORRECT_SCORE}&". ", "") &
+      IF(COUNTIF(FILTER(INDEX(Grades!A2:ZZ,,${masteryCol}), Grades!B2:B=$Z$2), ${RANGE_SOME_CORRECT_SCORE})>0,
+         "If at least one correct, score is "&${RANGE_SOME_CORRECT_SCORE}&".", "")
+    )
+  )`;
+  sh.getRange(subHeaderRow, 4).setFormula(masteryDescFormula).setWrap(true).setFontStyle('italic');
+
+  // Per-level attempt column descriptors
+  levelNames.forEach((_, i) => {
+    const col = 5 + i;
+    const descFormula = `="To earn a score of "&INDEX(${RANGE_LEVEL_SCORES},${i + 1})&", you must show proficiency "&INDEX(${RANGE_LEVEL_STREAK},${i + 1})&" times in a row."`;
+    sh.getRange(subHeaderRow, col).setFormula(descFormula).setWrap(true).setFontStyle('italic');
+  });
+
   // Table data formula (array): sorted by Unit (3) then Skill # (4), columns pulled via CHOOSECOLS
-  // We filter by selected email in C2 to disambiguate duplicate names
+  // We filter by selected email in Z2 to disambiguate duplicate names
   const chooseCols = [3, 4, 5, masteryCol, ...symbolCols];
-  const formula = `=IF($C$2="","",
+  const formula = `=IF($Z$2="","",
     CHOOSECOLS(
-      SORT(FILTER(Grades!A2:ZZ, Grades!B2:B=$C$2), 3, TRUE, 4, TRUE),
+      SORT(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2), 3, TRUE, 4, TRUE),
       ${chooseCols.join(',')}
     )
   )`;
-  sh.getRange(tableHeaderRow + 1, 1).setFormula(formula);
+  sh.getRange(subHeaderRow + 1, 1).setFormula(formula);
 
   // Pretty formatting
-  sh.setFrozenRows(tableHeaderRow); // freeze through header area
+  sh.setFrozenRows(subHeaderRow); // freeze header + subheader
   // Column widths
   sh.setColumnWidth(1, 90);  // Unit
   sh.setColumnWidth(2, 70);  // Skill #
@@ -94,8 +112,37 @@ function setupGradeViewSheet() {
   }
 
   // Alignments for readability
-  const dataRows = Math.max(1, sh.getMaxRows() - tableHeaderRow);
-  sh.getRange(tableHeaderRow + 1, 2, dataRows, 1).setHorizontalAlignment('center'); // Skill #
-  sh.getRange(tableHeaderRow + 1, 4, dataRows, 1 + levelNames.length).setHorizontalAlignment('center'); // Mastery + attempts
-  sh.getRange(tableHeaderRow + 1, 3, dataRows, 1).setWrap(true); // Description
+  const dataRowsGV = Math.max(1, sh.getMaxRows() - subHeaderRow);
+  sh.getRange(subHeaderRow + 1, 2, dataRowsGV, 1).setHorizontalAlignment('center'); // Skill #
+  sh.getRange(subHeaderRow + 1, 4, dataRowsGV, 1 + levelNames.length).setHorizontalAlignment('center'); // Mastery + attempts
+  sh.getRange(subHeaderRow + 1, 3, dataRowsGV, 1).setWrap(true); // Description
+
+  // Emphasize Mastery Grade: larger font for header and data
+  sh.getRange(tableHeaderRow, 4).setFontSize(14).setFontWeight('bold');
+  sh.getRange(subHeaderRow + 1, 4, dataRowsGV, 1).setFontSize(14).setFontWeight('bold');
+
+  // Set requested column widths for A..G
+  sh.setColumnWidth(1, 41);
+  sh.setColumnWidth(2, 47);
+  sh.setColumnWidth(3, 185);
+  sh.setColumnWidth(4, 88);
+  sh.setColumnWidth(5, 180);
+  sh.setColumnWidth(6, 180);
+  sh.setColumnWidth(7, 180);
+
+  // Optional: Unit summary to the right (I:K)
+  sh.getRange('I4').setValue('Unit Summary').setFontWeight('bold');
+  sh.getRange('I5:K5').setValues([['Unit', 'Average Grade', 'Skills']]).setFontWeight('bold').setBackground('#f0f3f5');
+  sh.getRange('I6').setFormula(`=IF($Z$2="","",QUERY(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2), "select Col3, avg(Col6), count(Col6) group by Col3 order by Col3", 0))`);
+  sh.setColumnWidth(9, 120);  // I
+  sh.setColumnWidth(10, 120); // J
+  sh.setColumnWidth(11, 90);  // K
+
+  // Legacy alignment block retained for compatibility; main alignment handled above
+}
+
+// Make a safe sheet name from an arbitrary string (strip forbidden chars, trim length)
+function safeSheetName_(name) {
+  const cleaned = String(name).replace(/[\\/*?:\[\]]/g, ' ').trim();
+  return cleaned.substring(0, 99) || 'Student';
 }

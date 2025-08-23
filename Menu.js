@@ -13,6 +13,9 @@ function onOpen() {
     .addItem('Setup Grade Sheet', 'setupGradeSheet')
     .addItem('Add Students & Skills', 'addStudentsAndSkills')
     .addItem('Setup Grade View', 'setupGradeViewSheet')
+    .addSeparator()
+    .addItem('Generate student views', 'generateStudentViews')
+    .addItem('Share student views', 'shareStudentViews')
     .addToUi();
 }
 
@@ -22,10 +25,10 @@ function onOpen() {
 function doInitialSetup() {
   const ss = SpreadsheetApp.getActive();
   // Settings and symbols/levels
-  if (typeof setupNamedRanges === 'function') setupNamedRanges();
+  setupNamedRanges();
   // Source sheets
-  if (typeof setupStudents === 'function') setupStudents();
-  if (typeof setupSkills === 'function') setupSkills();
+  setupStudents();
+  setupSkills();
   ss.toast('Initial setup complete.', 'Standards-Based Grading', 3);
 }
 

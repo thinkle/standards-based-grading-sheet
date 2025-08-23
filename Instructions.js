@@ -53,4 +53,6 @@ function writePostSetupInstructions() {
     <p>To create a filter view, click on the "Data" menu, then "Filter views", and "Create new filter view". You can then set the filter criteria to only show the rows you want to see.</p>
     `
   );
+  // set column width to 850
+  sheet.setColumnWidth(1, 850);
 }

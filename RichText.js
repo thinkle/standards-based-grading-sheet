@@ -1,6 +1,6 @@
 /** --------- STYLE SYSTEM (edit to taste) --------- */
 const COLOR_PRIMARY = '#0033a0';
-
+const COLOR_SECONDARY = '#464646';
 function styleBase_() {
   return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setFontSize(11).build();
 }
@@ -11,7 +11,16 @@ function styleH2_() {
   return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(15).setForegroundColor(COLOR_PRIMARY).build();
 }
 function styleH3_() {
-  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(13).setForegroundColor(COLOR_PRIMARY).build();
+  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(13).setForegroundColor(COLOR_SECONDARY).build();
+}
+function styleH4_() {
+  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(11).setForegroundColor(COLOR_PRIMARY).build();
+}
+function styleH5_() {
+  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(11).setForegroundColor(COLOR_SECONDARY).build();
+}
+function styleH6_() {
+  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setBold(true).setFontSize(10).setForegroundColor(COLOR_SECONDARY).build();
 }
 function styleLI_() {
   return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setFontSize(11).build();
@@ -37,11 +46,6 @@ function mergeStyles_() {
   return b.build();
 }
 
-/** --------- RENDERER ---------
- * Minimal HTML subset to RichTextValue:
- * Supports: <h1|h2|h3>, <li>, <b>, <i>, <u>, <a href="">
- * Unknown tags are ignored (content kept).
- */
 function setRichInstructions(range, html) {
   try {
     const rt = htmlFragmentToRichText_(html);
@@ -68,51 +72,75 @@ function htmlFragmentToRichText_(frag) {
     var end = text.length;
     if (end > start) runs.push({ start: start, end: end, style: style, link: link });
   }
-
-  function walkElement(el, inheritedStyle, currentLink) {
-    var tag = (el.getName() || '').toLowerCase();
-
-    var style = inheritedStyle || base;
-    var link = currentLink;
-
-    // Block tags
-    if (tag === 'h1') style = mergeStyles_(base, styleH1_());
-    else if (tag === 'h2') style = mergeStyles_(base, styleH2_());
-    else if (tag === 'h3') style = mergeStyles_(base, styleH3_());
-    else if (tag === 'li') {
-      style = mergeStyles_(base, styleLI_());
-      pushText('• ', style, link);
-    }
-
-    // Inline tags
-    if (tag === 'b' || tag === 'strong') style = mergeStyles_(style, styleBold_());
-    if (tag === 'i' || tag === 'em') style = mergeStyles_(style, styleItalic_());
-    if (tag === 'u') style = mergeStyles_(style, styleUnder_());
-    if (tag === 'a') {
-      var hrefAttr = el.getAttribute('href');
-      if (hrefAttr) link = hrefAttr.getValue();
-    }
-
-    // Children elements only (GAS lacks Element.getContent())
-    var kids = el.getChildren();
-
-    if (kids.length === 0) {
-      // Leaf: just text content
-      pushText(el.getText(), style, link);
-    } else {
-      // Walk child elements; NOTE: plain text between child tags is ignored.
-      for (var i = 0; i < kids.length; i++) {
-        walkElement(kids[i], style, link);
-      }
-    }
-
-    // Block endings → newline
-    if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'li') pushText('\n', base, null);
+  function pushNL() {
+    if (text.length === 0 || text.charAt(text.length - 1) !== '\n') text += '\n';
   }
 
-  // Walk top-level children (elements only)
-  var top = root.getChildren();
-  for (var i = 0; i < top.length; i++) walkElement(top[i], base, null);
+  function walk(node, style, link) {
+    // TEXT node
+    if (node.getType && node.getType() === XmlService.ContentTypes.TEXT) {
+      pushText(node.getValue(), style || base, link);
+      return;
+    }
+    // Only ELEMENT nodes beyond this point
+    if (!node.getType || node.getType() !== XmlService.ContentTypes.ELEMENT) return;
+
+    /** @type {XmlService.Element} */
+    var el = node;
+    var tag = (el.getName() || '').toLowerCase();
+
+    var curStyle = style || base;
+    var curLink = link;
+
+    var isBlock = (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'p' || tag === 'div');
+
+    // Block presets
+    if (tag === 'h1') curStyle = mergeStyles_(base, curStyle, styleH1_());
+    else if (tag === 'h2') curStyle = mergeStyles_(base, curStyle, styleH2_());
+    else if (tag === 'h3') curStyle = mergeStyles_(base, curStyle, styleH3_());
+    else if (tag === 'h4') curStyle = mergeStyles_(base, curStyle, styleH4_());
+    else if (tag === 'h5') curStyle = mergeStyles_(base, curStyle, styleH5_());
+    else if (tag === 'h6') curStyle = mergeStyles_(base, curStyle, styleH6_());
+    else if (tag === 'li') curStyle = mergeStyles_(base, curStyle, styleLI_());
+
+    // Inline overlays
+    if (tag === 'b' || tag === 'strong') curStyle = mergeStyles_(curStyle, styleBold_());
+    if (tag === 'i' || tag === 'em') curStyle = mergeStyles_(curStyle, styleItalic_());
+    if (tag === 'u') curStyle = mergeStyles_(curStyle, styleUnder_());
+    if (tag === 'a') {
+      var hrefAttr = el.getAttribute('href');
+      if (hrefAttr) curLink = hrefAttr.getValue();
+    }
+
+    if (isBlock) pushNL();
+    if (tag === 'li') pushText('• ', curStyle, curLink);
+
+    // Mixed-content traversal using getContentSize/getContent(i)
+    var size = el.getContentSize && el.getContentSize();
+    if (size && size > 0) {
+      for (var i = 0; i < size; i++) {
+        var child = el.getContent(i);
+        if (child.getType && child.getType() === XmlService.ContentTypes.TEXT) {
+          var val = child.getValue();
+          if (val) pushText(val, curStyle, curLink);
+        } else if (child.getType && child.getType() === XmlService.ContentTypes.ELEMENT) {
+          walk(child, curStyle, curLink);
+        }
+      }
+    } else {
+      // leaf element fallback
+      var txt = el.getText();
+      if (txt) pushText(txt, curStyle, curLink);
+    }
+
+    if (isBlock) pushNL();
+  }
+
+  // Walk root mixed content
+  var rootSize = root.getContentSize();
+  for (var i = 0; i < rootSize; i++) {
+    walk(root.getContent(i), base, null);
+  }
 
   builder.setText(text || '');
   for (var j = 0; j < runs.length; j++) {
@@ -121,18 +149,4 @@ function htmlFragmentToRichText_(frag) {
     if (r.link) builder.setLinkUrl(r.start, r.end, r.link);
   }
   return builder.build();
-}
-
-/** --------- EXAMPLES --------- */
-function demo_setRichInstructions() {
-  const sh = SpreadsheetApp.getActive().getActiveSheet();
-  const html = (
-    '<h2>Getting Started</h2>' +
-    '<li>Open the <b>Grades</b> sheet</li>' +
-    '<li>Click <i>Setup</i> → <u>Build</u></li>' +
-    '<li>See the guide: <a href="https://example.com">Docs</a></li>' +
-    '<h3>Notes</h3>' +
-    '<li>Use <b>B/I/U</b> for emphasis</li>'
-  );
-  setRichInstructions(sh.getRange('A1'), html);
 }
