@@ -28,6 +28,9 @@ function styleLI_() {
 function styleBold_() { return SpreadsheetApp.newTextStyle().setBold(true).build(); }
 function styleItalic_() { return SpreadsheetApp.newTextStyle().setItalic(true).build(); }
 function styleUnder_() { return SpreadsheetApp.newTextStyle().setUnderline(true).build(); }
+function styleSmall_() {
+  return SpreadsheetApp.newTextStyle().setFontFamily('Roboto').setFontSize(8).build();
+}
 
 /** Merge multiple TextStyles into one by re-applying props (simple overlay). */
 function mergeStyles_() {
@@ -46,9 +49,26 @@ function mergeStyles_() {
   return b.build();
 }
 
+/**
+ * Escape bare ampersands that are not part of a valid XML/HTML entity.
+ * This prevents XmlService.parse from choking when template interpolation
+ * inserts URLs like ...&range=... without &amp;.
+ *
+ * Matches any '&' not followed by one of:
+ *  - named entity: &word;
+ *  - decimal entity: &#1234;
+ *  - hex entity: &#x1F4A9;
+ */
+function escapeBareAmpersands_(s) {
+  if (s == null) return '';
+  return String(s).replace(/&(?!#\d+;|#x[0-9a-fA-F]+;|[a-zA-Z][a-zA-Z0-9]+;)/g, '&amp;');
+}
+
 function setRichInstructions(range, html) {
   try {
-    const rt = htmlFragmentToRichText_(html);
+    // Pre-sanitize common entity issues from template interpolation
+    const safe = escapeBareAmpersands_(html);
+    const rt = htmlFragmentToRichText_(safe);
     range.setRichTextValue(rt).setWrap(true);
   } catch (e) {
     throw new Error('Failed to render rich instructions. Ensure tags are well-formed XML. Original error: ' + e);
@@ -107,6 +127,7 @@ function htmlFragmentToRichText_(frag) {
     if (tag === 'b' || tag === 'strong') curStyle = mergeStyles_(curStyle, styleBold_());
     if (tag === 'i' || tag === 'em') curStyle = mergeStyles_(curStyle, styleItalic_());
     if (tag === 'u') curStyle = mergeStyles_(curStyle, styleUnder_());
+    if (tag === 'small') curStyle = mergeStyles_(curStyle, styleSmall_());
     if (tag === 'a') {
       var hrefAttr = el.getAttribute('href');
       if (hrefAttr) curLink = hrefAttr.getValue();
