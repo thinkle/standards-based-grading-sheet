@@ -9,7 +9,7 @@ function writePostSetupInstructions() {
   setRichInstructions(
     sheet.getRange('A1'),
     `<h1>Standards-Based Grading Sheet - Complete Guide</h1>
-    <p>This guide walks you through setting up and using your standards-based gradebook in four key stages:</p>
+    <p>This standards-based grading system was inspired by educational research and teacher feedback on effective assessment practices. This guide walks you through setting up and using your standards-based gradebook in four key stages:</p>
     <li><b>Stage 1:</b> Initial Setup - Configuring levels and mastery definitions</li>
     <li><b>Stage 2:</b> Students and Standards - Adding your roster and skills</li>
     <li><b>Stage 3:</b> Using the Gradebook - Daily grading and management</li>
@@ -38,10 +38,30 @@ function writePostSetupInstructions() {
     <li><b>Score:</b> The numeric grade assigned when this level is mastered</li>
     
     <h3>Step 2: Define Mastery Criteria</h3>
-    <p>The <b>Symbols</b> sheet defines what counts as success:</p>
-    <li><b>✓ (Character):</b> Represents successful attempt (Mastery: 1)</li>
-    <li><b>X (Character):</b> Represents unsuccessful attempt (Mastery: 0)</li>
-    <p>You can add additional symbols if needed (e.g., "P" for partial credit).</p>
+    <p>The <b>Symbols</b> sheet uses a three-column system that enhances teacher data entry based on educator feedback:</p>
+    <li><b>Character:</b> What teachers type for easy data entry</li>
+    <li><b>Mastery:</b> Whether this counts toward mastery (1 = Yes, 0 = No)</li>
+    <li><b>Symbol:</b> What displays in reports and student views</li>
+    
+    <h4>Comprehensive Symbol System:</h4>
+    <p>The system supports a rich variety of assessment marks originally designed for standards-based grading:</p>
+    
+    <h5>Successful Attempts (Count Toward Mastery):</h5>
+    <li><b>✔</b> - KDI (Knowledge Demonstrated Individually)</li>
+    <li><b>✔o</b> - KDI via teacher Observation</li>
+    <li><b>✔c</b> - KDI via Conversation with teacher</li>
+    <li><b>✔s</b> - KDI with a Silly mistake not related to the objective</li>
+    
+    <h5>Learning Attempts (Do Not Count Toward Mastery):</h5>
+    <li><b>H</b> - Knowledge Demonstrated with Help from a teacher or peer</li>
+    <li><b>G</b> - Knowledge demonstrated in a Group setting</li>
+    <li><b>✗</b> - Question attempted but answered incorrectly</li>
+    <li><b>✗o</b> - Teacher observes incorrect attempt</li>
+    <li><b>✗c</b> - Incorrect response in Conversation with teacher</li>
+    <li><b>PC</b> - Partially correct</li>
+    <li><b>N</b> - Not Attempted (score of 0)</li>
+    
+    <p><b>Customization:</b> You can define your own symbols and meanings. The three-column approach allows teachers to type simple characters (like "check" or "x") while displaying meaningful symbols (✓ or ✗) in student reports.</p>
     
     <h3>Step 3: Run Initial Setup</h3>
     <p>From the menu, select <b>Standards-Based Grading → Initial Setup</b> to create all necessary sheets and named ranges.</p>
