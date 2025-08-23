@@ -71,8 +71,12 @@ function setupGradesFormulas_(sh, settings, ctx) {
   const { firstUtilCol, firstAttemptCol, lastCol } = ctx;
 
   // Shared A1 ranges for header row (1) and first data row (2)
-  const attemptHeaderA1 = `${columnA1(firstAttemptCol)}1:${columnA1(lastCol)}1`;
-  const attemptRowA1 = `${columnA1(firstAttemptCol)}2:${columnA1(lastCol)}2`;
+  // Use ROW()-relative OFFSET/INDEX so formulas tolerate sorting and Table views.
+  const startA1 = columnA1(firstAttemptCol);
+  // Header vector for the current row: first row above this row, across all attempt columns
+  const headerGeneric = `OFFSET(INDEX(${startA1}:${startA1},ROW()),(ROW()-1)*-1,0,1,COLUMNS(${startA1}:ZZ))`;
+  // Current row attempt values across all attempt columns (expands to new columns automatically)
+  const rowValsGeneric = `OFFSET(INDEX(${startA1}:${startA1},ROW()),0,0,1,COLUMNS(${startA1}:ZZ))`;
 
   // Per-level String (mastery bits) and Streak formulas into row 2
   settings.codes.forEach((code, i) => {
@@ -82,9 +86,10 @@ function setupGradesFormulas_(sh, settings, ctx) {
 
     // Map symbol chars in attempt cells to mastery bits using Symbols table
     const stringFormula =
-      `=TEXTJOIN("",TRUE,ARRAYFORMULA(` +
-      `XLOOKUP(FILTER(${attemptRowA1}, REGEXMATCH(${attemptHeaderA1}, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0)` +
-      `))`;
+      `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},` +
+      `TEXTJOIN("",TRUE,ARRAYFORMULA(` +
+      `XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0)` +
+      `)))`;
     sh.getRange(2, stringCol).setFormula(stringFormula);
 
     // Longest run of 1s in the per-level string
@@ -94,24 +99,28 @@ function setupGradesFormulas_(sh, settings, ctx) {
 
     // Symbols: join pretty symbols corresponding to attempts for this level
     const symbolsFormula =
-      `=TEXTJOIN("",TRUE,ARRAYFORMULA(` +
-      `XLOOKUP(FILTER(${attemptRowA1}, REGEXMATCH(${attemptHeaderA1}, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-")` +
-      `))`;
+      `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},` +
+      `TEXTJOIN("",TRUE,ARRAYFORMULA(` +
+      `XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-")` +
+      `)))`;
     sh.getRange(2, symbolsCol).setFormula(symbolsFormula);
   });
 
   // Mastery Grade formula (highest level whose streak threshold is met wins)
-  const noneCorrectCheck = `ISERROR(SEARCH("1", TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => columnA1(firstUtilCol + i * 3 + 1) + '2').join(',')}} )))`;
+  const noneCorrectCheck = `ISERROR(SEARCH("1", TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
+    const strCol = columnA1(firstUtilCol + i * 3 + 1);
+    return `INDEX(${strCol}:${strCol},ROW())`;
+  }).join(',')}} )))`;
   const parts = settings.codes
     .map((_, i) => ({
-      cond: `${columnA1(firstUtilCol + i * 3)}2>=INDEX(${RANGE_LEVEL_STREAK},${i + 1})`,
+      cond: `INDEX(${columnA1(firstUtilCol + i * 3)}:${columnA1(firstUtilCol + i * 3)},ROW())>=INDEX(${RANGE_LEVEL_STREAK},${i + 1})`,
       val: `INDEX(${RANGE_LEVEL_SCORES},${i + 1})`,
     }))
     .reverse(); // evaluate highest first
 
   const ifs =
     `=IFS(` +
-    `COUNTA(${attemptRowA1})=0,"-",` +
+    `COUNTA(${rowValsGeneric})=0,"-",` +
     parts.map(p => `${p.cond},${p.val}`).join(',') + (parts.length ? ',' : '') +
     `${noneCorrectCheck},${RANGE_NONE_CORRECT_SCORE},` +
     `TRUE,${RANGE_SOME_CORRECT_SCORE}` +
@@ -328,26 +337,24 @@ function fillComputedFormulas_(sh, settings, layout) {
   if (rowCount <= 0) return;
 
   // Precompute header attempt A1 range (row 1) once
-  const attemptHeaderA1 = `${columnA1(firstAttemptCol)}1:${columnA1(lastCol)}1`;
+  const startA1 = columnA1(firstAttemptCol);
+  const headerGeneric = `OFFSET(INDEX(${startA1}:${startA1},ROW()),(ROW()-1)*-1,0,1,COLUMNS(${startA1}:ZZ))`;
+  const rowValsGeneric = `OFFSET(INDEX(${startA1}:${startA1},ROW()),0,0,1,COLUMNS(${startA1}:ZZ))`;
 
   // Mastery Grade formulas for all rows
   const masteryCol = layout.masteryCol;
   const masteryFormulas = new Array(rowCount);
+  const noneCorrectCheckGeneric = `ISERROR(SEARCH("1", TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
+    const strCol = columnA1(firstUtilCol + i * 3 + 1);
+    return `INDEX(${strCol}:${strCol},ROW())`;
+  }).join(',')}} )))`;
+  const partsGeneric = settings.codes.map((_, i) => {
+    const streakCol = columnA1(firstUtilCol + i * 3);
+    return `INDEX(${streakCol}:${streakCol},ROW())>=INDEX(${RANGE_LEVEL_STREAK},${i + 1}),INDEX(${RANGE_LEVEL_SCORES},${i + 1})`;
+  }).reverse().join(',');
+  const masteryFormulaGeneric = `=IFS(COUNTA(${rowValsGeneric})=0,"-",${partsGeneric}${partsGeneric ? ',' : ''}${noneCorrectCheckGeneric},${RANGE_NONE_CORRECT_SCORE},TRUE,${RANGE_SOME_CORRECT_SCORE})`;
   for (let r = 0; r < rowCount; r++) {
-    const row = startRow + r;
-    const noneCorrectCheck = `ISERROR(SEARCH("1", TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => columnA1(firstUtilCol + i * 3 + 1) + row).join(',')}} )))`;
-    const parts = settings.codes.map((_, i) => ({
-      cond: `${columnA1(firstUtilCol + i * 3)}${row}>=INDEX(${RANGE_LEVEL_STREAK},${i + 1})`,
-      val: `INDEX(${RANGE_LEVEL_SCORES},${i + 1})`,
-    })).reverse();
-    masteryFormulas[r] = [
-      `=IFS(` +
-      `COUNTA(${columnA1(firstAttemptCol)}${row}:${columnA1(lastCol)}${row})=0,"-",` +
-      parts.map(p => `${p.cond},${p.val}`).join(',') + (parts.length ? ',' : '') +
-      `${noneCorrectCheck},${RANGE_NONE_CORRECT_SCORE},` +
-      `TRUE,${RANGE_SOME_CORRECT_SCORE}` +
-      `)`
-    ];
+    masteryFormulas[r] = [masteryFormulaGeneric];
   }
   sh.getRange(startRow, masteryCol, rowCount, 1).setFormulas(masteryFormulas);
 
@@ -360,23 +367,15 @@ function fillComputedFormulas_(sh, settings, layout) {
     const streakArr = new Array(rowCount);
     const stringArr = new Array(rowCount);
     const symbolsArr = new Array(rowCount);
+    const stringColLetter = columnA1(stringCol);
+    const stringCellGeneric = `INDEX(${stringColLetter}:${stringColLetter},ROW())`;
+    const stringFormulaGeneric = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0))))`;
+    const streakFormulaGeneric = `=IF(${stringCellGeneric}="","",MAX(ARRAYFORMULA(LEN(SPLIT(${stringCellGeneric},"0",FALSE,FALSE)))))`;
+    const symbolsFormulaGeneric = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-"))))`;
     for (let r = 0; r < rowCount; r++) {
-      const row = startRow + r;
-      const attemptRowA1 = `${columnA1(firstAttemptCol)}${row}:${columnA1(lastCol)}${row}`;
-      const stringCellA1 = `${columnA1(stringCol)}${row}`;
-      stringArr[r] = [
-        `=TEXTJOIN("",TRUE,ARRAYFORMULA(` +
-        `XLOOKUP(FILTER(${attemptRowA1}, REGEXMATCH(${attemptHeaderA1}, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0)` +
-        `))`
-      ];
-      streakArr[r] = [
-        `=IF(${stringCellA1}="","",MAX(ARRAYFORMULA(LEN(SPLIT(${stringCellA1},"0",FALSE,FALSE)))))`
-      ];
-      symbolsArr[r] = [
-        `=TEXTJOIN("",TRUE,ARRAYFORMULA(` +
-        `XLOOKUP(FILTER(${attemptRowA1}, REGEXMATCH(${attemptHeaderA1}, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-")` +
-        `))`
-      ];
+      stringArr[r] = [stringFormulaGeneric];
+      streakArr[r] = [streakFormulaGeneric];
+      symbolsArr[r] = [symbolsFormulaGeneric];
     }
     sh.getRange(startRow, stringCol, rowCount, 1).setFormulas(stringArr);
     sh.getRange(startRow, streakCol, rowCount, 1).setFormulas(streakArr);
