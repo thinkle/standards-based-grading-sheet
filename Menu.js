@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
-/* exported onOpen, doInitialSetup, setupGradeSheet, addStudentsAndSkills */
-/* global SpreadsheetApp, setupNamedRanges, setupStudents, setupSkills, setupGradesSheet, populateGrades */
+/* exported onOpen, doInitialSetup, setupGradeSheet, addStudentsAndSkills, reformatGradesOnly */
+/* global SpreadsheetApp, setupNamedRanges, setupStudents, setupSkills, setupGradesSheet, populateGrades, reformatGradesOnly */
 
 /**
  * Adds a custom menu to the spreadsheet.
@@ -11,6 +11,7 @@ function onOpen() {
     .addItem('Initial setup', 'doInitialSetup')
     .addSeparator()
     .addItem('Setup Grade Sheet', 'setupGradeSheet')
+    .addItem('Reformat Grades (no content)', 'reformatGradesSheet')
     .addItem('Add Students & Skills', 'addStudentsAndSkills')
     .addItem('Setup Grade View', 'setupGradeViewSheet')
     .addSeparator()

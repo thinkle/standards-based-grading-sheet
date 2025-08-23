@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars */
+/* exported setupGradesSheet, populateGrades, reformatGradesSheet */
 /* global SpreadsheetApp,
           RANGE_SYMBOL_CHARS, RANGE_SYMBOL_MASTERY, RANGE_SYMBOL_SYMBOL,
           RANGE_LEVEL_STREAK, RANGE_LEVEL_SCORES, RANGE_NONE_CORRECT_SCORE, RANGE_SOME_CORRECT_SCORE,
@@ -165,7 +167,17 @@ function applyGradesFormatting_(sh, settings, ctx) {
     sh.getRange(1, symbolsCol, rows, 1).setBackground('#f5f5f5');
   });
 
-  // Attempt columns: restrict input to entries in SymbolChars named range and keep as text
+  // Fixed base widths (A..F): Name, Email, Unit, Skill #, Description, Mastery Grade
+  const baseWidths = [115, 232, 40, 46, 172, 60];
+  baseWidths.forEach((w, i) => sh.setColumnWidth(1 + i, w));
+
+  // Set a reasonable width for visible per-level Symbols (display) columns
+  settings.codes.forEach((_, i) => {
+    const symbolsCol = ctx.firstUtilCol + i * 3 + 2;
+    sh.setColumnWidth(symbolsCol, 82);
+  });
+
+  // Attempt columns: restrict input, set as text, narrow width (~34px), center align, and highlight per level
   if (ctx.firstAttemptCol <= ctx.lastCol) {
     const attemptsWidth = ctx.lastCol - ctx.firstAttemptCol + 1;
     const symbolsRange = ss.getRangeByName(RANGE_SYMBOL_CHARS);
@@ -174,14 +186,50 @@ function applyGradesFormatting_(sh, settings, ctx) {
       sh.getRange(2, ctx.firstAttemptCol, sh.getMaxRows() - 1, attemptsWidth).setDataValidation(rule);
     }
     sh.getRange(1, ctx.firstAttemptCol, sh.getMaxRows(), attemptsWidth).setNumberFormat('@STRING@');
-    // Make dropdown columns compact and centered
-    sh.setColumnWidths(ctx.firstAttemptCol, attemptsWidth, 48);
-    sh.getRange(1, ctx.firstAttemptCol, sh.getMaxRows(), attemptsWidth).setHorizontalAlignment('center');
+
+    // Color palette low -> med -> adv (cycles if >3 levels)
+    const palette = ['#fff7d6', '#e8f4ff', '#f1e8ff'];
+    let col = ctx.firstAttemptCol;
+    settings.defaultAttempts.forEach((cntRaw, levelIdx) => {
+      const cnt = Number(cntRaw || 0);
+      if (cnt > 0) {
+        const color = palette[levelIdx % palette.length];
+        // Narrow width and center align
+        sh.setColumnWidths(col, cnt, 34);
+        sh.getRange(1, col, sh.getMaxRows(), cnt).setHorizontalAlignment('center');
+        // Highlight the whole attempt area for this level
+        sh.getRange(1, col, Math.max(2, sh.getMaxRows()), cnt).setBackground(color);
+        col += cnt;
+      }
+    });
   }
 
   // Header bold for readability
-  sh.getRange(1, 1, 1, ctx.headers.length).setFontWeight('bold');
+  const headerCols = ctx.headers && ctx.headers.length ? ctx.headers.length : ctx.lastCol;
+  sh.getRange(1, 1, 1, headerCols).setFontWeight('bold');
 }
+
+/**
+ * Reapply formatting only (no content or headers changes).
+ * Useful after manual edits or palette tweaks.
+ */
+function reformatGradesSheet() {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ensureGradesSheet_(ss);
+  const settings = readLevelSettings_(ss);
+  const layout = computeGradesLayoutFromSettings_(settings);
+  const headersLen = Math.max(sh.getLastColumn(), layout.lastCol);
+  const ctx = {
+    headers: new Array(headersLen).fill(''),
+    firstUtilCol: layout.firstUtilCol,
+    firstAttemptCol: layout.firstAttemptCol,
+    lastCol: Math.max(layout.lastCol, sh.getLastColumn()),
+    masteryCol: layout.masteryCol,
+  };
+  applyGradesFormatting_(sh, settings, ctx);
+}
+
+
 
 /* -------------------- population -------------------- */
 /**

@@ -133,7 +133,19 @@ function setupGradeViewSheet(studentName) {
   // Optional: Unit summary to the right (I:K)
   sh.getRange('I4').setValue('Unit Summary').setFontWeight('bold');
   sh.getRange('I5:K5').setValues([['Unit', 'Average Grade', 'Skills']]).setFontWeight('bold').setBackground('#f0f3f5');
-  sh.getRange('I6').setFormula(`=IF($Z$2="","",QUERY(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2), "select Col3, avg(Col6), count(Col6) group by Col3 order by Col3", 0))`);
+  // Unit summary: average only numeric grades (ignore non-numeric like "-")
+  sh.getRange('I6').setFormula(`=IF($Z$2="","",
+    QUERY(
+      FILTER(
+        { INDEX(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2),,3),
+          IFERROR(VALUE(INDEX(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2),,6)))
+        },
+        ISNUMBER(IFERROR(VALUE(INDEX(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2),,6))))
+      ),
+      "select Col1, avg(Col2), count(Col2) group by Col1 order by Col1",
+      0
+    )
+  )`);
   sh.setColumnWidth(9, 120);  // I
   sh.setColumnWidth(10, 120); // J
   sh.setColumnWidth(11, 90);  // K
@@ -143,6 +155,6 @@ function setupGradeViewSheet(studentName) {
 
 // Make a safe sheet name from an arbitrary string (strip forbidden chars, trim length)
 function safeSheetName_(name) {
-  const cleaned = String(name).replace(/[\\/*?:\[\]]/g, ' ').trim();
+  const cleaned = String(name).replace(/[\\/*?:[\]]/g, ' ').trim();
   return cleaned.substring(0, 99) || 'Student';
 }
