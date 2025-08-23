@@ -206,24 +206,44 @@ function applyGradesFormatting_(sh, settings, ctx) {
     });
   }
 
-  // Mark computed columns (Mastery Grade + util) with a subtle fill and readable text
-  const neutralBg = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_BG) || '#f5f5f5';
+  // Mark computed columns (Mastery Grade + util) with a subtle fill and readable text (with light striping)
+  const neutralBg = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_BG) || '#f7f7f7';
+  const neutralBgAlt = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_BG_ALT) || '#f0f0f0';
   const neutralText = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.NEUTRAL_TEXT) || '#333333';
-  sh.getRange(1, 4, Math.max(2, sh.getMaxRows() - 0), 1).setBackground(neutralBg).setFontColor(neutralText);
+  const totalRows = Math.max(2, sh.getMaxRows());
+  // Mastery column base background (we'll overlay gradient CF on data rows)
+  sh.getRange(1, 4, totalRows, 1).setBackground(neutralBg).setFontColor(neutralText);
   // Apply background per level for both hidden Streak/String and visible Mastery
   settings.codes.forEach((_, i) => {
     const streakCol = ctx.firstUtilCol + i * 3;
     const symbolsCol = streakCol + 2;
-    const rows = Math.max(2, sh.getMaxRows() - 0);
+    const rows = totalRows;
     sh.getRange(1, streakCol, rows, 2).setBackground(neutralBg);
     // Visible per-level REFLECTION column (Symbols) uses regular level BG.
     // Map by header name to level index to avoid mismatch if order changes.
     const headerName = sh.getRange(1, symbolsCol).getValue();
     const levelIdx = settings.names.findIndex(n => n && headerName && String(headerName).startsWith(n));
     const level = levelIdx >= 0 ? (levelIdx + 1) : (i + 1);
-    const levelBg = (STYLE && STYLE.COLORS && STYLE.COLORS.LEVELS[level] && STYLE.COLORS.LEVELS[level].BG) || neutralBg;
-    const levelText = (STYLE && STYLE.COLORS && STYLE.COLORS.LEVELS[level] && STYLE.COLORS.LEVELS[level].TEXT) || '#000000';
+    const levelDef = (STYLE && STYLE.COLORS && STYLE.COLORS.LEVELS[level]) || {};
+    const levelBg = levelDef.BG || neutralBg;
+    const levelBgAlt = levelDef.BG_ALT || levelBg;
+    const levelText = levelDef.TEXT || '#000000';
+    // Base background for entire column (header + data)
     sh.getRange(1, symbolsCol, rows, 1).setBackground(levelBg).setFontColor(levelText);
+    // Conditional format stripe on even-numbered rows (data rows only)
+    try {
+      const dataRange = sh.getRange(2, symbolsCol, Math.max(1, sh.getMaxRows() - 1), 1);
+      const rules = sh.getConditionalFormatRules();
+      const dataA1 = dataRange.getA1Notation();
+      const filtered = rules.filter(r => !r.getRanges().some(rg => rg.getA1Notation() === dataA1));
+      const stripeRule = SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=ISEVEN(ROW())')
+        .setBackground(levelBgAlt)
+        .setRanges([dataRange])
+        .build();
+      filtered.push(stripeRule);
+      sh.setConditionalFormatRules(filtered);
+    } catch (e) { /* CF not applied; static base color remains */ }
   });
 
   // Fixed base widths (A..F): Name, Email, Unit, Skill #, Description, Mastery Grade
@@ -255,13 +275,29 @@ function applyGradesFormatting_(sh, settings, ctx) {
         const code = (headerVal && String(headerVal).trim()) ? String(headerVal).trim().charAt(0) : '';
         const levelFromCode = settings.codes.findIndex(c => String(c).toUpperCase() === code.toUpperCase());
         const level = levelFromCode >= 0 ? (levelFromCode + 1) : (levelIdx + 1);
-        const levelBgBright = (STYLE && STYLE.COLORS && STYLE.COLORS.LEVELS[level] && STYLE.COLORS.LEVELS[level].BG_BRIGHT) || '#fff7d6';
-        const levelTextBright = (STYLE && STYLE.COLORS && STYLE.COLORS.LEVELS[level] && STYLE.COLORS.LEVELS[level].TEXT_BRIGHT) || '#000000';
+        const levelDef = (STYLE && STYLE.COLORS && STYLE.COLORS.LEVELS[level]) || {};
+        const levelBgBright = levelDef.BG_BRIGHT || '#fff7d6';
+        const levelBgBrightAlt = levelDef.BG_BRIGHT_ALT || levelBgBright;
+        const levelTextBright = levelDef.TEXT_BRIGHT || '#000000';
         // Narrow width and center align
         sh.setColumnWidths(col, cnt, 34);
         sh.getRange(1, col, sh.getMaxRows(), cnt).setHorizontalAlignment('center');
         // Highlight the whole attempt area for this level (ACTION area)
-        sh.getRange(1, col, Math.max(2, sh.getMaxRows()), cnt).setBackground(levelBgBright).setFontColor(levelTextBright);
+        sh.getRange(1, col, totalRows, cnt).setBackground(levelBgBright).setFontColor(levelTextBright);
+        // Conditional format stripe on even-numbered rows
+        try {
+          const dataRange = sh.getRange(2, col, Math.max(1, sh.getMaxRows() - 1), cnt);
+          const rules = sh.getConditionalFormatRules();
+          const dataA1 = dataRange.getA1Notation();
+          const filtered = rules.filter(r => !r.getRanges().some(rg => rg.getA1Notation() === dataA1));
+          const stripeRule = SpreadsheetApp.newConditionalFormatRule()
+            .whenFormulaSatisfied('=ISEVEN(ROW())')
+            .setBackground(levelBgBrightAlt)
+            .setRanges([dataRange])
+            .build();
+          filtered.push(stripeRule);
+          sh.setConditionalFormatRules(filtered);
+        } catch (e) { /* CF not applied; static base color remains */ }
         col += cnt;
       }
     });

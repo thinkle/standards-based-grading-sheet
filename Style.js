@@ -32,49 +32,60 @@ const STYLE = {
       SCALE_MAX: '#2e7d32'
     },
 
-    // Per-level palettes; BG = regular tone, BG_BRIGHT = action tone for input areas
+    // Per-level palettes; BG = regular tone, BG_ALT = striped alt; BG_BRIGHT = action tone for input areas, BG_BRIGHT_ALT = striped alt
     LEVELS: {
       1: {
-        BG: '#ffc37e', // soft orange
-        BG_BRIGHT: '#ae5215', // strong orange
+        BG: '#fff1e6',        // very light peach
+        BG_ALT: '#ffeadb',     // stripe alt
+        BG_BRIGHT: '#ffd7ba',  // toned-down action
+       BG_BRIGHT_ALT: '#ffcca8',
         TEXT: '#000000',
-        TEXT_BRIGHT: '#ffffff'
+        TEXT_BRIGHT: '#000000'
       },
       2: {
-        BG: '#ffe4d0', // soft yellow (fix 8-digit hex)
-        BG_BRIGHT: '#ffd1af', // bright yellow
+        BG: '#fff9e6',        // very light yellow
+        BG_ALT: '#fff4d6',
+        BG_BRIGHT: '#ffecb3',
+        BG_BRIGHT_ALT: '#ffe39a',
         TEXT: '#000000',
-        TEXT_BRIGHT: '#19006a'
+        TEXT_BRIGHT: '#000000'
       },
       3: {
-        BG: '#e0ffe8', // soft green (fix 8-digit hex)
-        BG_BRIGHT: '#4f6337', // strong green (fix 8-digit hex)
+        BG: '#e8f5e9',        // very light green
+        BG_ALT: '#ddf0df',
+        BG_BRIGHT: '#c8e6c9',
+        BG_BRIGHT_ALT: '#bde0be',
         TEXT: '#000000',
-        TEXT_BRIGHT: '#ffffff'
+        TEXT_BRIGHT: '#000000'
       },
       4: { // purple hues
-        BG: '#e1bee7',
-        BG_BRIGHT: '#ba68c8',
+        BG: '#f3e5f5',
+        BG_ALT: '#eedeef',
+        BG_BRIGHT: '#e1bee7',
+        BG_BRIGHT_ALT: '#d7b2dd',
         TEXT: '#000000',
-        TEXT_BRIGHT: '#ffffff'
+        TEXT_BRIGHT: '#000000'
       },
       5: { // gold for gold medal!
-        BG: '#ffd700',
-        BG_BRIGHT: '#fff494', // fix 8-digit hex
+        BG: '#fff8e1',
+        BG_ALT: '#fff2c6',
+        BG_BRIGHT: '#ffe082',
+        BG_BRIGHT_ALT: '#ffd460',
         TEXT: '#000000',
-        TEXT_BRIGHT: '#ffffff'
+        TEXT_BRIGHT: '#000000'
       }
     },
 
     // General UI surfaces
     UI: {
-      NEUTRAL_BG: '#f5f5f5',
+      NEUTRAL_BG: '#f7f7f7',
+      NEUTRAL_BG_ALT: '#f0f0f0',
       NEUTRAL_TEXT: '#333333',
-      HEADER_BG: '#f0f3f5',
+      HEADER_BG: '#f7f9fb',
       HEADER_TEXT: '#000000',
-      INPUT_HIGHLIGHT: '#fffbe6',
+      INPUT_HIGHLIGHT: '#fffdf0',
       INPUT_TEXT: '#000000',
-      WARNING_BG: '#fff3cd',
+      WARNING_BG: '#fff6da',
       WARNING_TEXT: '#000000'
     }
   }
