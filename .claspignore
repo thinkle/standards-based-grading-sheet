@@ -1,0 +1,16 @@
+# Ignore everything by default
+**/**
+
+# Allow only Apps Script sources and manifest
+!appsscript.json
+!**/*.gs
+!**/*.js
+!**/*.ts
+
+# Then explicitly ignore local tooling and node artifacts
+node_modules/**
+scripts/**
+package-lock.json
+package.json
+package-*.json
+*.map

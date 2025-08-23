@@ -1,0 +1,12 @@
+{
+  "name": "standards-based-grading-sheet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local tooling for Apps Script project (XML validation for Instructions.js)",
+  "scripts": {
+    "validate:xml": "node scripts/validate-instructions.js"
+  },
+  "devDependencies": {
+    "xmldom": "^0.6.0"
+  }
+}
