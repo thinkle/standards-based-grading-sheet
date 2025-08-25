@@ -5,7 +5,8 @@
           RANGE_STUDENT_NAMES, RANGE_STUDENT_EMAILS, RANGE_SKILL_UNITS, RANGE_SKILL_NUMBERS, RANGE_SKILL_DESCRIPTORS,
           RANGE_LEVEL_NAMES, RANGE_LEVEL_SHORTCODES, RANGE_LEVEL_DEFAULTATTEMPTS, RANGE_LEVEL_STREAK, RANGE_LEVEL_SCORES,
           RANGE_NONE_CORRECT_SCORE, RANGE_SOME_CORRECT_SCORE,
-          RANGE_SYMBOL_CHARS, RANGE_SYMBOL_MASTERY, RANGE_SYMBOL_SYMBOL
+          RANGE_SYMBOL_CHARS, RANGE_SYMBOL_MASTERY, RANGE_SYMBOL_SYMBOL,
+          createUnitOverview
 */
 
 /**
@@ -61,7 +62,16 @@ function populateDemoSkills() {
     ['Unit 2: Linear Equations', '2.3', 'Solve multi-step linear equations'],
     ['Unit 3: Linear Functions', '3.1', 'Identify slope and intercept'],
     ['Unit 3: Linear Functions', '3.2', 'Graph linear functions'],
-    ['Unit 3: Linear Functions', '3.3', 'Write linear equations from contexts']
+    ['Unit 3: Linear Functions', '3.3', 'Write linear equations from contexts'],
+    ['Unit 4: Quadratic Functions', '4.1', 'Identify quadratic functions'],
+    ['Unit 4: Quadratic Functions', '4.2', 'Graph quadratic functions'],
+    ['Unit 4: Quadratic Functions', '4.3', 'Solve quadratic equations'],
+    ['Unit 5: Factoring', '5.1', 'Identify factors'],
+    ['Unit 5: Factoring', '5.2', 'Factor trinomials'],
+    ['Unit 5: Factoring', '5.3', 'Factor by grouping'],
+    ['Unit 6: Rational Expressions', '6.1', 'Simplify rational expressions'],
+    ['Unit 6: Rational Expressions', '6.2', 'Multiply rational expressions'],
+    ['Unit 6: Rational Expressions', '6.3', 'Divide rational expressions']
   ];
   sh.getRange(2, 1, demo.length, 3).setValues(demo);
 }
@@ -218,6 +228,7 @@ function runDemoSetup() {
   setupStudents();
   setupSkills();
   setupGradesSheet();
+  createUnitOverview();
   // Populate grid (rows)
   if (typeof populateGrades === 'function') populateGrades();
   // Demo values
