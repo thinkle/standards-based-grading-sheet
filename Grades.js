@@ -33,6 +33,24 @@ function setupGradesSheet() {
   applyGradesFormatting_(sh, settings, ctx);
 }
 
+/**
+ * Return the first row index (>=2) where columns A..E are all blank. Returns null if none found.
+ */
+function findFirstEmptyDataRow_(sh) {
+  const startRow = 2;
+  const lastRow = Math.max(sh.getLastRow(), startRow);
+  if (lastRow < startRow) return startRow;
+  const numRows = lastRow - startRow + 1;
+  // Read columns A..E for existing rows
+  const vals = sh.getRange(startRow, 1, numRows, 5).getValues();
+  for (let i = 0; i < vals.length; i++) {
+    const row = vals[i];
+    const allBlank = row.every(c => c === null || c === undefined || String(c).trim() === '');
+    if (allBlank) return startRow + i;
+  }
+  return null;
+}
+
 /* -------------------- (1) HEADERS -------------------- */
 function setupGradesHeaders_(sh, settings) {
   // Base columns that are typed-in by the teacher
@@ -367,7 +385,58 @@ function applyGradesFormatting_(sh, settings, ctx) {
       .setRanges([dataRange])
       .build();
     filtered.push(gradient, textColorRule);
-    sh.setConditionalFormatRules(filtered);
+    // Before applying mastery-gradient rules, add unit-based text color rules for Unit/Skill#/Description
+    try {
+      const dataStart = 2;
+      const dataCount = Math.max(1, sh.getMaxRows() - 1);
+      // Place a hidden helper column that maps the Unit text to an index via UNIQUE(RANGE_SKILL_UNITS)
+      const minHelperStart = 12;
+      const fallbackLast = (ctx && ctx.lastCol) ? ctx.lastCol : sh.getLastColumn();
+      const helperCol = Math.max((ctx && ctx.lastCol) ? ctx.lastCol + 1 : fallbackLast + 1, minHelperStart);
+      if (sh.getMaxColumns() < helperCol) {
+        sh.insertColumnsAfter(sh.getMaxColumns(), helperCol - sh.getMaxColumns());
+      }
+      // Write an ARRAYFORMULA that MATCHes the Unit column (C) against the unique skill units list.
+      // This produces a 1-based index per data row that we can reference from conditional formatting.
+      sh.getRange(dataStart, helperCol).setFormula(`=ARRAYFORMULA(MATCH($C${dataStart}:$C, UNIQUE(${RANGE_SKILL_UNITS}), 0))`);
+      const helperColA = columnA1(helperCol);
+      // Hide the helper column
+      try { sh.hideColumns(helperCol, 1); } catch (e) { /* ignore */ }
+
+      // Build unit color conditional-format rules for columns C:E (Unit, Skill #, Skill Description)
+      const unitRange = sh.getRange(dataStart, 3, dataCount, 3);
+      const rulesBefore = filtered; // start from filtered set we've been building
+      const unitColors = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.UNIT_TEXT_COLORS) || ['#3a3a3a'];
+      const nColors = Math.max(1, unitColors.length);
+      const helperIdxCol = helperColA ? `$${helperColA}` : '$AB';
+      // Remove any existing rules that target the same unitRange to avoid duplicates
+      const targetA1 = unitRange.getA1Notation();
+      let baseRules = rulesBefore.filter(r => !r.getRanges().some(rg => rg.getA1Notation() === targetA1));
+
+      const unitRules = [];
+      for (let k = 0; k < nColors; k++) {
+        const fEven = `=AND(${helperIdxCol}${dataStart}<>"", MOD(${helperIdxCol}${dataStart}-1, ${nColors})=${k}, ISEVEN(ROW()))`;
+        const fOdd = `=AND(${helperIdxCol}${dataStart}<>"", MOD(${helperIdxCol}${dataStart}-1, ${nColors})=${k}, NOT(ISEVEN(ROW())))`;
+        const ruleEven = SpreadsheetApp.newConditionalFormatRule()
+          .whenFormulaSatisfied(fEven)
+          .setFontColor(unitColors[k])
+          .setRanges([unitRange])
+          .build();
+        const ruleOdd = SpreadsheetApp.newConditionalFormatRule()
+          .whenFormulaSatisfied(fOdd)
+          .setFontColor(unitColors[k])
+          .setRanges([unitRange])
+          .build();
+        unitRules.push(ruleEven, ruleOdd);
+      }
+      // Prepend unit rules so they take precedence over generic stripes/backgrounds
+      baseRules.unshift(...unitRules);
+      sh.setConditionalFormatRules(baseRules);
+    } catch (e) {
+      if (console && console.warn) console.warn('Grades unit color rules warn', e);
+      // Fallback: apply previously computed filtered rules
+      sh.setConditionalFormatRules(filtered);
+    }
   } catch (e) { /* STYLE or method may be unavailable; skip gracefully */ }
 }
 
@@ -506,7 +575,11 @@ function populateGrades() {
 
   // Append missing rows in one batch
   if (newRows.length > 0) {
-    sh.getRange(sh.getLastRow() + 1, 1, newRows.length, 5).setValues(newRows);
+    // Find the first fully-empty data row among typed columns (A..E) so we don't append at the
+    // very bottom when ARRAYFORMULA or helper columns are present. This ignores auto-filled
+    // helper columns and targets rows where all of A..E are blank.
+    const insertRow = findFirstEmptyDataRow_(sh) || (sh.getLastRow() + 1);
+    sh.getRange(insertRow, 1, newRows.length, 5).setValues(newRows);
   }
 
   // Fill computed formulas down for all data rows
