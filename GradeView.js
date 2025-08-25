@@ -1,10 +1,13 @@
 /* eslint-disable no-unused-vars */
 /* global SpreadsheetApp, STYLE,
+RANGE_SKILL_UNITS,
           RANGE_STUDENT_NAMES, RANGE_STUDENT_EMAILS,
           RANGE_LEVEL_NAMES, RANGE_LEVEL_STREAK, RANGE_LEVEL_SCORES,
           RANGE_NONE_CORRECT_SCORE, RANGE_SOME_CORRECT_SCORE */
 
 const SHEET_GRADE_VIEW = 'Grade View';
+// Toggle to enable/disable applying header highlight to the first row of each Unit
+const HIGHLIGHT_FIRST_LINE_OF_UNIT = false;
 
 /**
  * Build or rebuild a read-friendly Grade View sheet.
@@ -103,6 +106,45 @@ function setupGradeViewSheet(studentName) {
   )`;
   sh.getRange(subHeaderRow + 1, 1).setFormula(formula);
 
+  // Helper column for unit-index mapping (hidden):
+  // We'll place them immediately after the last column of the generated table so they stay adjacent
+  // - helperCol1: Derive the unit number for this unit
+
+  let helperCol1A = null;
+  try {
+    const helperStartRow = subHeaderRow + 1;
+    // compute where the table ends so helper columns are placed just after it
+    const lastTableCol = tableHeaders.length; // number of columns in the presented table
+    // ensure helper columns don't overlap the Unit Summary (I:K). Start at least at column 12 (L).
+    const minHelperStart = 12;
+    const helperCol1 = Math.max(lastTableCol + 1, minHelperStart); // first helper column (right after table or after summary)
+
+    // ensure sheet has enough columns
+    if (sh.getMaxColumns() < helperCol1) {
+      sh.insertColumnsAfter(sh.getMaxColumns(), helperCol1 - sh.getMaxColumns());
+    }
+
+    // small helper to convert column number to A1 letter(s)
+    const colToA1 = function (c) {
+      let s = '';
+      while (c > 0) {
+        const m = (c - 1) % 26;
+        s = String.fromCharCode(65 + m) + s;
+        c = Math.floor((c - 1) / 26);
+      }
+      return s;
+    };
+    // UNIQUE/MATCH spill at helperCol1 starting at helperStartRow
+    sh.getRange(helperStartRow, helperCol1).setFormula(
+      `=ARRAYFORMULA(MATCH($A${helperStartRow}:$A,UNIQUE(${RANGE_SKILL_UNITS}),0))`
+    );
+    // store the A1 letter for CF formulas
+    helperCol1A = colToA1(helperCol1);
+    sh.hideColumns(helperCol1, 1);
+  } catch (e) {
+    if (console && console.warn) console.warn('Grade View helper columns warn', e);
+  }
+
   // Pretty formatting
   sh.setFrozenRows(subHeaderRow); // freeze header + subheader
   // Column widths
@@ -134,11 +176,11 @@ function setupGradeViewSheet(studentName) {
   sh.setColumnWidth(6, 180);
   sh.setColumnWidth(7, 180);
 
-  // Optional: Unit summary to the right (I:K)
-  sh.getRange('I4').setValue('Unit Summary').setFontWeight('bold');
-  sh.getRange('I5:K5').setValues([['Unit', 'Average Grade', 'Skills']]).setFontWeight('bold').setBackground(headerBg);
+  // Optional: Unit summary to the right (I:K) — moved up one row
+  sh.getRange('I3').setValue('Unit Summary').setFontWeight('bold');
+  sh.getRange('I4:K4').setValues([['Unit', 'Average Grade', 'Skills']]).setFontWeight('bold').setBackground(headerBg);
   // Unit summary: average only numeric grades (ignore non-numeric like "-")
-  sh.getRange('I6').setFormula(`=IF($Z$2="","",
+  sh.getRange('I5').setFormula(`=IF($Z$2="","",
     QUERY(
       FILTER(
         { INDEX(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2),,3),
@@ -153,6 +195,11 @@ function setupGradeViewSheet(studentName) {
   sh.setColumnWidth(9, 120);  // I
   sh.setColumnWidth(10, 120); // J
   sh.setColumnWidth(11, 90);  // K
+  // Format averages in J to two decimals (now J5:J)
+  try {
+    const avgColRange = sh.getRange(5, 10, Math.max(1, sh.getMaxRows() - 4), 1); // J5:J
+    avgColRange.setNumberFormat('0.00');
+  } catch (e) { /* formatting best-effort */ }
 
   // Color application: neutral stripes, per-level attempts stripes, mastery gradient
   try {
@@ -177,6 +224,9 @@ function setupGradeViewSheet(studentName) {
       .setRanges([neutralRange])
       .build();
 
+    // Build ordered rules container (we don't use header-row highlighting here)
+    const orderedRules = [];
+
     // Per-level attempts columns start at column 5
     const attemptsStartCol = 5;
     const attemptRules = [];
@@ -192,13 +242,69 @@ function setupGradeViewSheet(studentName) {
       // Stripe rule on even rows
       const r = sh.getRange(dataStart, col, dataCount, 1);
       targetA1s.push(r.getA1Notation());
+      // (no per-level header rules here)
       const stripe = SpreadsheetApp.newConditionalFormatRule()
         .whenFormulaSatisfied('=ISEVEN(ROW())')
         .setBackground(altBg)
         .setRanges([r])
         .build();
       attemptRules.push(stripe);
+      // then push stripe so header takes precedence
+      orderedRules.push(stripe);
     }
+
+    // Unit-based text color rules (cycle via helper column AB (28)).
+    try {
+      const unitColorRanges = [];
+      // A..C (Unit, Skill #, Description)
+      const unitCoreRange = sh.getRange(dataStart, 1, dataCount, 3);
+      unitColorRanges.push(unitCoreRange);
+      targetA1s.push(unitCoreRange.getA1Notation());
+      // Add all attempt columns to the unit-color target ranges
+      for (let i = 0; i < levelNames.length; i++) {
+        const r = sh.getRange(dataStart, attemptsStartCol + i, dataCount, 1);
+        unitColorRanges.push(r);
+        targetA1s.push(r.getA1Notation());
+      }
+      // Formula anchored to top data row. Use MOD to cycle colors for many units.
+      // Build N conditional-format rules from STYLE.COLORS.UI.UNIT_TEXT_COLORS and cycle via helper index.
+      const unitColors = (STYLE && STYLE.COLORS && STYLE.COLORS.UI && STYLE.COLORS.UI.UNIT_TEXT_COLORS) || ['#3a3a3a', '#0d47a1'];
+      const nColors = Math.max(1, unitColors.length);
+      // Use dynamically computed helper column letter if available; otherwise fall back to AB.
+      const helperIdxCol = helperCol1A ? `$${helperCol1A}` : '$AB';
+      const unitRules = [];
+      // Separate ranges: restrict unit-based formatting to core A:C only so attempt columns keep their own styling
+      const unitTextRanges = [unitCoreRange];
+      const unitCoreRangeOnly = unitCoreRange;
+      for (let k = 0; k < nColors; k++) {
+        // odd (non-even) rows rule: set font color across all target ranges
+        const fOdd = `=AND(${helperIdxCol}${dataStart}<>"", MOD(${helperIdxCol}${dataStart}-1, ${nColors})=${k}, NOT(ISEVEN(ROW())))`;
+        const ruleFontOdd = SpreadsheetApp.newConditionalFormatRule()
+          .whenFormulaSatisfied(fOdd)
+          .setFontColor(unitColors[k])
+          .setRanges(unitTextRanges)
+          .build();
+        // even rows rule: set font color across all target ranges
+        const fEven = `=AND(${helperIdxCol}${dataStart}<>"", MOD(${helperIdxCol}${dataStart}-1, ${nColors})=${k}, ISEVEN(ROW()))`;
+        const ruleFontEven = SpreadsheetApp.newConditionalFormatRule()
+          .whenFormulaSatisfied(fEven)
+          .setFontColor(unitColors[k])
+          .setRanges(unitTextRanges)
+          .build();
+        // even rows bg rule applied only to core unit columns (A:C) so per-level attempt backgrounds stay intact
+        /* const ruleBgEven = SpreadsheetApp.newConditionalFormatRule()
+          .whenFormulaSatisfied(fEven)
+          .setBackground(neutralBgAlt)
+          .setRanges([unitCoreRangeOnly])
+          .build(); */
+        // push bg rule first so it wins for background on core columns, then font rules
+        unitRules.push(
+          /* ruleBgEven, */
+          ruleFontEven, ruleFontOdd);
+      }
+      // Insert unit rules early so they take precedence over generic stripes (preserve order)
+      orderedRules.unshift(...unitRules);
+    } catch (e) { if (console && console.warn) console.warn('Unit color rules warn', e); }
 
     // Mastery Grade gradient on column 4
     const gradeCol = 4;
@@ -249,7 +355,14 @@ function setupGradeViewSheet(studentName) {
 
     // De-duplicate rules for our target ranges
     rules = rules.filter(r => !r.getRanges().some(rg => targetA1s.includes(rg.getA1Notation())));
-    rules.push(neutralStripe, ...attemptRules, gradeGradient, gradeText);
+    // Push header rules (ordered) before stripe rules so they take priority
+    rules.push(...orderedRules);
+    // Neutral stripe for A..C should come after header rule for A..C
+    rules.push(neutralStripe);
+    // Any remaining attempt stripe rules that weren't already pushed (attemptRules) can be pushed too
+    // (orderedRules already contains per-column stripes), but include any extras for safety
+    rules.push(...attemptRules.filter(ar => !orderedRules.includes(ar)));
+    rules.push(gradeGradient, gradeText);
     sh.setConditionalFormatRules(rules);
   } catch (e) {
     if (console && console.warn) console.warn('Grade View color rules warn', e);
