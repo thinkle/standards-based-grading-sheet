@@ -146,7 +146,7 @@ function setupGradeViewSheet(studentName) {
   }
 
   // Pretty formatting
-  sh.setFrozenRows(subHeaderRow); // freeze header + subheader
+  sh.setFrozenRows(tableHeaderRow); // freeze header
   // Column widths
   sh.setColumnWidth(1, 90);  // Unit
   sh.setColumnWidth(2, 70);  // Skill #
