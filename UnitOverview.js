@@ -27,7 +27,7 @@ function createUnitOverview() {
     const dataRange = sh.getDataRange();
     const lastCol = Math.max(1, dataRange.getLastColumn());
     const lastRow = Math.max(1, dataRange.getLastRow());
-    sh.getRange(1, 1, 1, lastCol).setFontWeight('bold');
+    sh.getRange(1, 1, 1, lastCol).setFontWeight('bold').setWrap(true);
     sh.setFrozenRows(1);
     sh.setColumnWidth(1, 180);
     if (lastCol >= 2) sh.setColumnWidth(2, 240);
