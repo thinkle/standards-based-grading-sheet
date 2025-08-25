@@ -16,7 +16,8 @@ const MENU = {
   ADD_STUDENTS_AND_SKILLS: 'Add Students & Skills',
   SETUP_GRADE_VIEW: 'Setup Grade View',
   GENERATE_STUDENT_VIEWS: 'Generate student views',
-  SHARE_STUDENT_VIEWS: 'Share student views'
+  SHARE_STUDENT_VIEWS: 'Share student views',
+  GENERATE_UNIT_OVERVIEW: 'Create Unit Overview (Averages)'
 }
 
 function onOpen() {
@@ -29,9 +30,11 @@ function onOpen() {
     .addItem(MENU.REFORMAT_GRADES, 'reformatGradesSheet')
     .addItem(MENU.ADD_STUDENTS_AND_SKILLS, 'addStudentsAndSkills')
     .addItem(MENU.SETUP_GRADE_VIEW, 'setupGradeViewSheet')
+    .addItem(MENU.GENERATE_UNIT_OVERVIEW, 'createUnitOverview')
     .addSeparator()
     .addItem(MENU.GENERATE_STUDENT_VIEWS, 'generateStudentViews')
     .addItem(MENU.SHARE_STUDENT_VIEWS, 'shareStudentViews');
+
 
   // Advanced submenu
   const adv = ui.createMenu('Advanced')
@@ -43,6 +46,7 @@ function onOpen() {
     .addItem('Repair Text Formats', 'repairTextFormats')
     .addSeparator()
     .addItem('Set Up Demo (all-in-one)', 'runDemoSetup');
+
 
   main.addSubMenu(adv).addToUi();
 }
