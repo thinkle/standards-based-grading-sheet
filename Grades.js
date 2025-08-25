@@ -261,10 +261,14 @@ function applyGradesFormatting_(sh, settings, ctx) {
     const attemptsWidth = ctx.lastCol - ctx.firstAttemptCol + 1;
     const symbolsRange = ss.getRangeByName(RANGE_SYMBOL_CHARS);
     if (symbolsRange) {
-      const rule = SpreadsheetApp.newDataValidation().requireValueInRange(symbolsRange, true).setAllowInvalid(false).build();
+      const rule = SpreadsheetApp.newDataValidation()
+        .requireValueInRange(symbolsRange, true)
+        .setAllowInvalid(true) // warn, don’t block
+        .setHelpText('Type a symbol or choose from the list. See the Symbols sheet for allowed entries (e.g., 1, 1o, H, PC, X, 0, N).')
+        .build();
       sh.getRange(2, ctx.firstAttemptCol, sh.getMaxRows() - 1, attemptsWidth).setDataValidation(rule);
     }
-    sh.getRange(1, ctx.firstAttemptCol, sh.getMaxRows(), attemptsWidth).setNumberFormat('@STRING@');
+    sh.getRange(1, ctx.firstAttemptCol, sh.getMaxRows(), attemptsWidth).setNumberFormat('@');
 
     let col = ctx.firstAttemptCol;
     settings.defaultAttempts.forEach((cntRaw, levelIdx) => {
@@ -388,6 +392,47 @@ function reformatGradesSheet() {
   applyGradesFormatting_(sh, settings, ctx);
   // 2) Re-apply all computed formulas across existing data rows
   fillComputedFormulas_(sh, settings, layout);
+}
+
+/**
+ * Normalize user edits in attempt cells to reduce validation friction.
+ * - Trim spaces, uppercase letters (except keep '1' and digits),
+ * - Map '0' to 'N' (explicit none), allow 'pc' -> 'PC', 'xo'/'xc'/'xs' -> uppercased,
+ * - Leave anything else as-is (validation is warn-only and rules will still compute).
+ */
+function onEdit(e) {
+  try {
+    if (!e || !e.range || !e.value) return;
+    const sh = e.range.getSheet();
+    if (sh.getName() !== SHEET_GRADES) return;
+    // Determine attempt columns from headers (look for XY1 style like B1, I1, etc.)
+    const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const firstAttemptCol = header.findIndex(h => /^([A-Za-z])1$/.test(String(h || ''))) + 1;
+    if (firstAttemptCol <= 0) return;
+    const lastCol = sh.getLastColumn();
+    const r = e.range;
+    const inAttemptArea = r.getRow() >= 2 && r.getColumn() >= firstAttemptCol && r.getColumn() <= lastCol;
+    if (!inAttemptArea) return;
+    const raw = String(e.value).trim();
+    if (raw === '') return;
+    let norm = raw;
+    // quick aliases
+    if (norm === '0') norm = 'N';
+    // Preserve leading '1' then optional letter
+    const m = norm.match(/^1([a-zA-Z])?$/);
+    if (m) {
+      norm = '1' + (m[1] ? m[1].toLowerCase() : '');
+    } else {
+      // Uppercase general tokens like pc, h, g, x, xo, xc, xs
+      norm = norm.toUpperCase();
+    }
+    // Replace only if changed
+    if (norm !== raw) {
+      r.setValue(norm);
+    }
+  } catch (err) {
+    // Best-effort; ignore errors to avoid blocking user typing
+  }
 }
 
 
