@@ -90,19 +90,23 @@ function populateDemoSkills() {
  * Populate demo grades across students and skills with a variety of cases.
  */
 function populateDemoGrades() {
+  const absoluteStart = new Date();
   const ss = SpreadsheetApp.getActive();
   // Ensure base structures
+
   if (!ss.getSheetByName('Students')) setupStudents();
   if (!ss.getSheetByName('Skills')) setupSkills();
   if (!ss.getSheetByName('Grades')) setupGradesSheet();
+  console.log(`Set up any necessary missing sheets, took ${new Date() - absoluteStart}ms)`);
 
   // Build Student x Skill grid in Grades
-  if (typeof populateGrades === 'function') populateGrades();
+  //if (typeof populateGrades === 'function') populateGrades();
 
   // Read settings for attempts
+  let start = new Date();
   const codes = ss.getRangeByName(RANGE_LEVEL_SHORTCODES).getValues().flat().filter(String);
   const defaultAttempts = ss.getRangeByName(RANGE_LEVEL_DEFAULTATTEMPTS).getValues().flat().slice(0, codes.length).map(n => Number(n || 0));
-
+  console.log(`Read level settings, took ${new Date() - start}ms`);
   const gradesSh = ss.getSheetByName('Grades');
   const lastRow = gradesSh.getLastRow();
   if (lastRow < 2) return;
@@ -110,6 +114,7 @@ function populateDemoGrades() {
   // Build symbol pools from Symbols sheet so we exercise everything teachers might enter
   const symbolChars = ss.getRangeByName(RANGE_SYMBOL_CHARS).getValues().flat().map(s => String(s || '').trim());
   const symbolMastery = ss.getRangeByName(RANGE_SYMBOL_MASTERY).getValues().flat().slice(0, symbolChars.length).map(n => Number(n || 0));
+  console.log(`Done reading symbols, now reading has taken ${new Date() - start}ms`);
   const masterySymbols = [];
   const failSymbols = [];
   for (let i = 0; i < symbolChars.length; i++) {
@@ -120,7 +125,7 @@ function populateDemoGrades() {
   if (masterySymbols.length === 0) masterySymbols.push('1');
   if (failSymbols.length === 0) failSymbols.push('X');
 
-  // Determine attempt columns region by header scan
+  // Determine attempt columns region by header scan  
   const headerRow = gradesSh.getRange(1, 1, 1, gradesSh.getLastColumn()).getValues()[0];
   const firstAttemptCol = headerRow.findIndex(h => /^([A-Za-z])1$/.test(String(h || ''))) + 1; // like B1, I1, M1
   if (firstAttemptCol <= 0) return;
@@ -134,7 +139,8 @@ function populateDemoGrades() {
     levelOffsets.push({ code: String(codes[li]), start: off, len });
     off += len;
   }
-
+  console.log('Finished reading header data, etc total time so far is ', new Date() - absoluteStart);
+  let generatingGradeStart = new Date();
   // Per-student mastery probabilities by level code (noise added later per task)
   const probsByStudent = {
     'Alice Johnson': { B: 0.85, I: 0.75, M: 0.65 },
@@ -172,17 +178,25 @@ function populateDemoGrades() {
 
   // Batch-read columns A..E (Name, Email, Unit, Skill #, Descriptor) so we can skip empty rows
   const rowsData = gradesSh.getRange(2, 1, rowCount, 5).getValues();
+  // Progress instrumentation
+  const runStart = Date.now();
+  let lastLog = runStart;
+  const progressInterval = Math.max(100, Math.floor(rowCount / 10)); // log at least every ~10% or every 100 rows
+
+  if (console && console.log) console.log(`Filling demo grades: ${rowCount} rows to process...`);
+
   for (let r = 2; r <= lastRow; r++) {
     const row = rowsData[r - 2] || [];
     const studentName = String(row[0] || '').trim();
     const unitVal = String(row[2] || '').trim();
     // Skip rows without a student name or without a skill unit (these are not valid grade rows)
+
+    const base = probsByStudent[studentName] || probsByStudent.__default__;
+    const rowVals = new Array(attemptWidth).fill('');
     if (!studentName || !unitVal) {
       allRowValues.push(rowVals);
       continue;
     }
-    const base = probsByStudent[studentName] || probsByStudent.__default__;
-    const rowVals = new Array(attemptWidth).fill('');
 
     var allowNextLevel = true; // start with first level permitted
     for (let i = 0; i < levelOffsets.length; i++) {
@@ -222,18 +236,38 @@ function populateDemoGrades() {
       allowNextLevel = successCount > 0;
     }
     allRowValues.push(rowVals);
-  }
 
+    // Periodic progress log
+    if ((r - 1) % progressInterval === 0) {
+      const now = Date.now();
+      const elapsed = now - runStart;
+      const sinceLast = now - lastLog;
+      lastLog = now;
+      if (console && console.log) console.log(`populateDemoGrades: processed ${r - 1}/${rowCount} rows (elapsed ${Math.round(elapsed / 1000)}s, +${Math.round(sinceLast / 1000)}s)`);
+    }
+  }
+  console.log('Done generating grades - generating time is ', new Date() - generatingGradeStart);
+  start = new Date();
   // Write entire attempt area in one go for speed (only if there are attempt columns)
   if (attemptWidth > 0 && rowCount > 0) {
-    gradesSh.getRange(2, firstAttemptCol, rowCount, attemptWidth).setValues(allRowValues);
+    if (console && console.log) console.log(`Writing ${rowCount}×${attemptWidth} attempt cells to sheet...`);
+    const writeStart = Date.now();
+    try {
+      gradesSh.getRange(2, firstAttemptCol, rowCount, attemptWidth).setValues(allRowValues);
+      if (console && console.log) console.log(`Write complete (${Math.round((Date.now() - writeStart) / 1000)}s).`);
+    } catch (e) {
+      if (console && console.log) console.log(`Error writing attempts: ${e && e.message}`);
+      throw e;
+    }
   }
-
+  console.log('Pushed grades to sheet in ', new Date() - start);
+  start = new Date();
   // Coverage pass: ensure every symbol from the Symbols sheet appears at least once
   const ensureSymbols = masterySymbols.concat(failSymbols).filter(Boolean);
   if (ensureSymbols.length && attemptWidth > 0 && rowCount > 0) {
     // Place missing symbols in the attempt area; number of placements is small so per-cell writes are acceptable
     let rr = 2, cc = firstAttemptCol;
+    if (console && console.log) console.log(`Ensuring coverage for ${ensureSymbols.length} symbols...`);
     for (const sym of ensureSymbols) {
       if (!usedSymbols[sym]) {
         gradesSh.getRange(rr, cc).setValue(sym);
@@ -242,6 +276,7 @@ function populateDemoGrades() {
         if (cc > firstAttemptCol + attemptWidth - 1) { cc = firstAttemptCol; rr++; if (rr > lastRow) rr = 2; }
       }
     }
+    if (console && console.log) console.log(`Coverage placements complete.`, new Date() - start);
   }
 
   // Make sure formats are correct (text) so digits don’t coerce
