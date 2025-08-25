@@ -39,7 +39,6 @@ const RANGE_SOME_CORRECT_SCORE = 'SomeCorrectScore';
 function setupNamedRanges() {
   setupSymbols();
   setupLevelSettings();
-  setupSettings();
 }
 
 
@@ -132,9 +131,7 @@ function setupSymbols() {
   upsertNamedRange_(ss, RANGE_SYMBOLS, sh.getRange('A2:C'));
 }
 
-function setupSettings() {
-  console.log('fix me');
-}
+
 
 /* ---------- HELPER ---------- */
 function upsertNamedRange_(ss, name, range) {
