@@ -178,7 +178,7 @@ function setupGradesFormulas_(sh, settings, ctx) {
   const ifs =
     `=IFS(` +
     // No attempts on this row -> show "-" to indicate ungraded.
-    `COUNTA(${rowValsGeneric})=0,"-",` +
+    `COUNTA(${rowValsGeneric})=0,"",` +
     parts.map(p => `${p.cond},${p.val}`).join(',') + (parts.length ? ',' : '') +
     // If no "1" anywhere, emit the configured "none correct" score; otherwise fall back to "some correct".
     `${noneCorrectCheck},${RANGE_NONE_CORRECT_SCORE},` +
