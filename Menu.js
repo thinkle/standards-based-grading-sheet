@@ -21,7 +21,7 @@ const MENU = {
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu(MENU.TITLE)
+  const main = ui.createMenu(MENU.TITLE)
     .addItem(MENU.SETUP, 'doInitialSetup')
     .addItem(MENU.REGENERATE_INSTRUCTIONS, 'writePostSetupInstructions') // dev only
     .addSeparator()
@@ -31,8 +31,20 @@ function onOpen() {
     .addItem(MENU.SETUP_GRADE_VIEW, 'setupGradeViewSheet')
     .addSeparator()
     .addItem(MENU.GENERATE_STUDENT_VIEWS, 'generateStudentViews')
-    .addItem(MENU.SHARE_STUDENT_VIEWS, 'shareStudentViews')
-    .addToUi();
+    .addItem(MENU.SHARE_STUDENT_VIEWS, 'shareStudentViews');
+
+  // Advanced submenu
+  const adv = ui.createMenu('Advanced')
+    .addItem('Nuke! (delete all sheets except Instructions)', 'nukeAllSheetsExceptInstructions')
+    .addSeparator()
+    .addItem('Populate Demo Students', 'populateDemoStudents')
+    .addItem('Populate Demo Skills', 'populateDemoSkills')
+    .addItem('Populate Demo Grades', 'populateDemoGrades')
+    .addItem('Repair Text Formats', 'repairTextFormats')
+    .addSeparator()
+    .addItem('Set Up Demo (all-in-one)', 'runDemoSetup');
+
+  main.addSubMenu(adv).addToUi();
 }
 
 /**
