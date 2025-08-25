@@ -41,7 +41,17 @@ function populateDemoStudents() {
     ['Ben Rivera', 'ben@example.com'],
     ['Chloe Kim', 'chloe@example.com'],
     ['Diego Patel', 'diego@example.com'],
-    ['Emi Sato', 'emi@example.com']
+    ['Emi Sato', 'emi@example.com'],
+    ['Frankie Lee', 'frankie@example.com'],
+    ['Grace Chen', 'grace@example.com'],
+    ['Maria da Silva', 'maria@example.com'],
+    ['Noah Brown', 'noah@example.com'],
+    ['Olivia Martinez', 'olivia@example.com'],
+    ['Luzdivina Rodriguez', 'luzdivina@example.com'],
+    ['Mia Wong', 'mia@example.com'],
+    ['Nguyen Van An', 'nguyen@example.com'],
+    ['Khang Nguyen', 'khang@example.com'],
+    ['Hana Lee', 'hana@example.com']
   ];
   sh.getRange(2, 1, demo.length, 2).setValues(demo);
 }
@@ -132,6 +142,15 @@ function populateDemoGrades() {
     'Chloe Kim': { B: 0.15, I: 0.10, M: 0.05 },
     'Diego Patel': { B: 0.70, I: 0.55, M: 0.40 },
     'Emi Sato': { B: 0.60, I: 0.60, M: 0.55 },
+    'Franki Lee': { B: .95, I: 0.85, M: 0.75 },
+    'Grace Chen': { B: 0.80, I: 0.80, M: 0.20 },
+    'Hana Lee': { B: 0.90, I: 0.70, M: 0.60 },
+    'Maria da Silva': { B: 0.7, I: 0.85, M: 0.9 },
+    'Luzdivina Rodriguez': { B: 1, I: 0.9, M: 0.7 },
+    'Mia Wong': { B: 0.6, I: 0.5, M: 0.4 },
+    'Nguyen Van An': { B: 0.8, I: 0.7, M: 0.6 },
+    'Khang Nguyen': { B: 0.9, I: 0.8, M: 0.7 },
+    'Olivia Martinez': { B: 0.75, I: 0.85, M: 0.95 },
     __default__: { B: 0.55, I: 0.45, M: 0.35, __fallback: 0.40 }
   };
 
@@ -151,8 +170,17 @@ function populateDemoGrades() {
   // helper: random integer inclusive
   function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 
+  // Batch-read columns A..E (Name, Email, Unit, Skill #, Descriptor) so we can skip empty rows
+  const rowsData = gradesSh.getRange(2, 1, rowCount, 5).getValues();
   for (let r = 2; r <= lastRow; r++) {
-    const studentName = String(gradesSh.getRange(r, 1).getValue() || '');
+    const row = rowsData[r - 2] || [];
+    const studentName = String(row[0] || '').trim();
+    const unitVal = String(row[2] || '').trim();
+    // Skip rows without a student name or without a skill unit (these are not valid grade rows)
+    if (!studentName || !unitVal) {
+      allRowValues.push(rowVals);
+      continue;
+    }
     const base = probsByStudent[studentName] || probsByStudent.__default__;
     const rowVals = new Array(attemptWidth).fill('');
 
@@ -204,6 +232,7 @@ function populateDemoGrades() {
   // Coverage pass: ensure every symbol from the Symbols sheet appears at least once
   const ensureSymbols = masterySymbols.concat(failSymbols).filter(Boolean);
   if (ensureSymbols.length && attemptWidth > 0 && rowCount > 0) {
+    // Place missing symbols in the attempt area; number of placements is small so per-cell writes are acceptable
     let rr = 2, cc = firstAttemptCol;
     for (const sym of ensureSymbols) {
       if (!usedSymbols[sym]) {
@@ -222,27 +251,55 @@ function populateDemoGrades() {
 /**
  * One-click demo setup: named ranges, student/skills, grade sheet, populate grid, then demo attempts.
  */
+
+function timer(stamp) {
+  const now = Date.now();
+  const elapsed = now - stamp;
+  return { now, elapsed };
+}
+
+function toastAndLog(ss, message) {
+  if (ss && typeof ss.toast === 'function') ss.toast(message, 'Standards-Based Grading', 3);
+  if (console && console.log) console.log(message);
+}
+
 function runDemoSetup() {
   const ss = SpreadsheetApp.getActive();
+  let startTime = Date.now();
   setupNamedRanges();
+  let { now, elapsed } = timer(startTime);
+  toastAndLog(ss, `Set up settings (${elapsed}ms)`);
   setupStudents();
   setupSkills();
+  ({ now, elapsed } = timer(now));
+  toastAndLog(ss, `Set up student and skills sheets (${elapsed}ms)`);
   setupGradesSheet();
+  ({ now, elapsed } = timer(now));
+  toastAndLog(ss, `Set up grades sheet (${elapsed}ms)`);
   createUnitOverview();
-  // Populate grid (rows)
-  if (typeof populateGrades === 'function') populateGrades();
+  ({ now, elapsed } = timer(now));
+  toastAndLog(ss, `Set up unit overview (${elapsed}ms)`);
   // Demo values
   populateDemoStudents();
   populateDemoSkills();
-  // Rebuild grid now that demo data exists
+  ({ now, elapsed } = timer(now));
+  toastAndLog(ss, `Populated demo students and skills (${elapsed}ms)`);
+  // Populate grid (rows)
   if (typeof populateGrades === 'function') populateGrades();
+  ({ now, elapsed } = timer(now));
+  toastAndLog(ss, `Set up grade grid for students+assignments (${elapsed}ms)`);
   // Fill sample attempts
   populateDemoGrades();
+  ({ now, elapsed } = timer(now));
+  toastAndLog(ss, `Filled in demo grades (${elapsed}ms)`);
   // Build Grade View tab
   setupGradeViewSheet();
+  ({ now, elapsed } = timer(now));
+  toastAndLog(ss, `Set up demo sheet (${elapsed}ms)`);
   // Ensure key entry columns are plain text
   try { repairTextFormats(); } catch (e) { /* best-effort */ }
-  ss.toast('Demo setup complete.', 'Standards-Based Grading', 5);
+  let totalElapsed = Date.now() - startTime;
+  toastAndLog(ss, `Demo setup complete. (${totalElapsed}ms)`, 'Standards-Based Grading', 5);
 }
 
 /**
