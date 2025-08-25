@@ -99,10 +99,15 @@ function setupSymbols() {
   for (let i = 0; i < 3; i++) if (!hdr[i]) hdr[i] = desired[i];
   sh.getRange(1, 1, 1, 3).setValues([hdr]);
   sh.setFrozenRows(1);
+  // Ensure symbol entry columns are plain text to prevent coercion (e.g., 1 or 0)
+  try {
+    sh.getRange('A:A').setNumberFormat('@'); // Character (typed token)
+    sh.getRange('C:C').setNumberFormat('@'); // Display symbol
+  } catch (e) { /* ignore if unavailable */ }
 
   // seed rows if empty
   if (sh.getLastRow() < 2) {
-    sh.getRange(2, 1, 8, 3).setValues([
+    const demo = [
       // Add symbols: this taxonomy comes
       // from BTC (see https://sites.google.com/brzmath.com/btcrubric)
       ['1', 1, '✓'],
@@ -111,9 +116,13 @@ function setupSymbols() {
       ['X', 0, '✗'],
       ['Xo', 0, '✗o'],
       ['Xs', 0, '✗s'],
-      ['P', 0, 'PC'],
+      // Partially correct, Group, Help display glyphs
+      ['P', 0, '◐'], // Partially Correct
+      ['G', 0, 'ⓖ'], // Group
+      ['H', 0, 'ⓗ'], // Help
       ['N', 0, 'N'],
-    ]);
+    ];
+    sh.getRange(2, 1, demo.length, 3).setValues(demo);
   }
 
   // named ranges (open-ended)
