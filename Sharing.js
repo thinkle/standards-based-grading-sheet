@@ -266,7 +266,7 @@ function ensureChildViewFromSource_(childSS, srcTab, parentUrl, tabName) {
   // Clear values only, keep formatting
   try { copied.clear({ contentsOnly: true }); } catch (e) { if (console && console.warn) console.warn('clear contents warn', e); }
   // Set IMPORTRANGE at A1 to bring in live data
-  const importFormula = `=IMPORTRANGE("${parentUrl}", "${tabName}!A1:G")`;
+  const importFormula = `=IMPORTRANGE("${parentUrl}", "${tabName}!A1:Z")`;
   copied.getRange('A1').setFormula(importFormula);
   // Apply best-effort formatting to the external sheet
   try { formatExternalViewSheet_(copied); } catch (e) { if (console && console.warn) console.warn('format external after import warn', e); }
