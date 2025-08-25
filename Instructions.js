@@ -11,7 +11,7 @@ function step(counter = 'default') {
   if (!counters[counter]) {
     counters[counter] = 1;
   }
-  let stepString = `Step ${counters[counter]}`;
+  let stepString = `${counters[counter]}`;
   counters[counter]++;
   return stepString;
 }
