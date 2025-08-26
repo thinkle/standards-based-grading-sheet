@@ -140,9 +140,9 @@ function setupGradesFormulas_(sh, settings, ctx) {
     // Then XLOOKUP the symbols to their mastery bits and TEXTJOIN into a bitstring for streak analysis.
     const stringFormula =
       `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},` +
-      `TEXTJOIN("",TRUE,ARRAYFORMULA(` +
-      `XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0)` +
-      `)))`;
+      `IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(` +
+      `XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0)` +
+      `)),""))`;
     sh.getRange(2, stringCol).setFormula(stringFormula);
 
     // Longest run of 1s in the per-level string. We split on 0 (treating 0 as a divider),
@@ -155,18 +155,21 @@ function setupGradesFormulas_(sh, settings, ctx) {
     // to provide a compact visual summary in the utility area.
     const symbolsFormula =
       `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},` +
-      `TEXTJOIN("",TRUE,ARRAYFORMULA(` +
-      `XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-")` +
-      `)))`;
+      `IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(` +
+      `XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-")` +
+      `)),""))`;
     sh.getRange(2, symbolsCol).setFormula(symbolsFormula);
   });
 
   // Mastery Grade formula (highest level whose streak threshold is met wins)
-  // noneCorrectCheck: detect if there are zero "1" bits across all per-level String columns for this row.
-  const noneCorrectCheck = `ISERROR(SEARCH("1", TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
+  // combinedBits: concatenation of all per-level String columns for this row.
+  // If combinedBits is empty (no attempts mapped to bits), emit "" so downstream queries/AVG don't break.
+  const combinedBits = `TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
     const strCol = columnA1(firstUtilCol + i * 3 + 1);
     return `INDEX(${strCol}:${strCol},ROW())`;
-  }).join(',')}} )))`;
+  }).join(',')}} )`;
+  // noneCorrectCheck: detect if there are zero "1" bits across all per-level String columns for this row.
+  const noneCorrectCheck = `ISERROR(SEARCH("1", ${combinedBits}))`;
   const parts = settings.codes
     .map((_, i) => ({
       // Compare this row’s streak for the level against that level’s required streak threshold.
@@ -177,7 +180,9 @@ function setupGradesFormulas_(sh, settings, ctx) {
 
   const ifs =
     `=IFS(` +
-    // No attempts on this row -> show "-" to indicate ungraded.
+    // If there are no bits anywhere on this row -> show "" to indicate ungraded.
+    `${combinedBits}="","",` +
+    // No attempts on this row -> show "" to indicate ungraded.
     `COUNTA(${rowValsGeneric})=0,"",` +
     parts.map(p => `${p.cond},${p.val}`).join(',') + (parts.length ? ',' : '') +
     // If no "1" anywhere, emit the configured "none correct" score; otherwise fall back to "some correct".
@@ -619,16 +624,18 @@ function fillComputedFormulas_(sh, settings, layout) {
   // Mastery Grade formulas for all rows
   const masteryCol = layout.masteryCol;
   const masteryFormulas = new Array(rowCount);
-  // noneCorrectCheck: same concept as above, but expressed generically for a filled range.
-  const noneCorrectCheckGeneric = `ISERROR(SEARCH("1", TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
+  // combinedBitsGeneric: concatenation of all per-level String columns for this row.
+  const combinedBitsGeneric = `TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
     const strCol = columnA1(firstUtilCol + i * 3 + 1);
     return `INDEX(${strCol}:${strCol},ROW())`;
-  }).join(',')}} )))`;
+  }).join(',')}} )`;
+  // noneCorrectCheck: same concept as above, but expressed generically for a filled range.
+  const noneCorrectCheckGeneric = `ISERROR(SEARCH("1", ${combinedBitsGeneric}))`;
   const partsGeneric = settings.codes.map((_, i) => {
     const streakCol = columnA1(firstUtilCol + i * 3);
     return `INDEX(${streakCol}:${streakCol},ROW())>=INDEX(${RANGE_LEVEL_STREAK},${i + 1}),INDEX(${RANGE_LEVEL_SCORES},${i + 1})`;
   }).reverse().join(',');
-  const masteryFormulaGeneric = `=IFS(COUNTA(${rowValsGeneric})=0,"-",${partsGeneric}${partsGeneric ? ',' : ''}${noneCorrectCheckGeneric},${RANGE_NONE_CORRECT_SCORE},TRUE,${RANGE_SOME_CORRECT_SCORE})`;
+  const masteryFormulaGeneric = `=IFS(${combinedBitsGeneric}="","",COUNTA(${rowValsGeneric})=0,"",${partsGeneric}${partsGeneric ? ',' : ''}${noneCorrectCheckGeneric},${RANGE_NONE_CORRECT_SCORE},TRUE,${RANGE_SOME_CORRECT_SCORE})`;
   for (let r = 0; r < rowCount; r++) {
     masteryFormulas[r] = [masteryFormulaGeneric];
   }
@@ -649,9 +656,9 @@ function fillComputedFormulas_(sh, settings, layout) {
     // - stringFormula: collect mastery bits for this level across attempts on the row
     // - streakFormula: longest run of 1s
     // - symbolsFormula: pretty symbol string for display
-    const stringFormulaGeneric = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0))))`;
+    const stringFormulaGeneric = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0))),""))`;
     const streakFormulaGeneric = `=IF(${stringCellGeneric}="","",MAX(ARRAYFORMULA(LEN(SPLIT(${stringCellGeneric},"0",FALSE,FALSE)))))`;
-    const symbolsFormulaGeneric = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}")), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-"))))`;
+    const symbolsFormulaGeneric = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-"))),""))`;
     for (let r = 0; r < rowCount; r++) {
       stringArr[r] = [stringFormulaGeneric];
       streakArr[r] = [streakFormulaGeneric];

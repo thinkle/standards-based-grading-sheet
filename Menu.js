@@ -27,7 +27,7 @@ function onOpen() {
     .addItem(MENU.REGENERATE_INSTRUCTIONS, 'writePostSetupInstructions') // dev only
     .addSeparator()
     .addItem(MENU.SETUP_GRADE_SHEET, 'setupGradeSheet')
-    .addItem(MENU.REFORMAT_GRADES, 'reformatGradesSheet')
+    .addItem(MENU.REFORMAT_GRADES, 'reformatGradesOnly')
     .addItem(MENU.ADD_STUDENTS_AND_SKILLS, 'addStudentsAndSkills')
     .addItem(MENU.SETUP_GRADE_VIEW, 'setupGradeViewSheet')
     .addItem(MENU.GENERATE_UNIT_OVERVIEW, 'createUnitOverview')
