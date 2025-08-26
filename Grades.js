@@ -178,17 +178,15 @@ function setupGradesFormulas_(sh, settings, ctx) {
     }))
     .reverse(); // evaluate highest first
 
-  const ifs =
-    `=IFS(` +
-    // If there are no bits anywhere on this row -> show "" to indicate ungraded.
-    `${combinedBits}="","",` +
-    // No attempts on this row -> show "" to indicate ungraded.
-    `COUNTA(${rowValsGeneric})=0,"",` +
+  // Build a LET-based mastery formula to reduce repetition and improve readability in-sheet.
+  const ifs = `=LET(combined, ${combinedBits}, attempts, COUNTA(${rowValsGeneric}), ` +
+    `IFS(` +
+    `combined="","",` +
+    `attempts=0,"",` +
     parts.map(p => `${p.cond},${p.val}`).join(',') + (parts.length ? ',' : '') +
-    // If no "1" anywhere, emit the configured "none correct" score; otherwise fall back to "some correct".
-    `${noneCorrectCheck},${RANGE_NONE_CORRECT_SCORE},` +
+    `ISERROR(SEARCH("1", combined)),${RANGE_NONE_CORRECT_SCORE},` +
     `TRUE,${RANGE_SOME_CORRECT_SCORE}` +
-    `)`;
+    `))`;
 
   // Mastery Grade uses dynamic column index from ctx
   sh.getRange(2, ctx.masteryCol).setFormula(ifs);
@@ -635,7 +633,7 @@ function fillComputedFormulas_(sh, settings, layout) {
     const streakCol = columnA1(firstUtilCol + i * 3);
     return `INDEX(${streakCol}:${streakCol},ROW())>=INDEX(${RANGE_LEVEL_STREAK},${i + 1}),INDEX(${RANGE_LEVEL_SCORES},${i + 1})`;
   }).reverse().join(',');
-  const masteryFormulaGeneric = `=IFS(${combinedBitsGeneric}="","",COUNTA(${rowValsGeneric})=0,"",${partsGeneric}${partsGeneric ? ',' : ''}${noneCorrectCheckGeneric},${RANGE_NONE_CORRECT_SCORE},TRUE,${RANGE_SOME_CORRECT_SCORE})`;
+  const masteryFormulaGeneric = `=LET(combined, ${combinedBitsGeneric}, attempts, COUNTA(${rowValsGeneric}), IFS(combined="","", attempts=0,"", ${partsGeneric}${partsGeneric ? ',' : ''}ISERROR(SEARCH("1", combined)),${RANGE_NONE_CORRECT_SCORE}, TRUE, ${RANGE_SOME_CORRECT_SCORE}))`;
   for (let r = 0; r < rowCount; r++) {
     masteryFormulas[r] = [masteryFormulaGeneric];
   }
