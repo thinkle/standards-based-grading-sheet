@@ -632,14 +632,23 @@ function fillComputedFormulas_(sh, settings, layout) {
   const attemptsRow = `COUNTA(${attemptsRowRef})`;
   const partsRow = settings.codes.map((_, i) => {
     const streakCol = columnA1(firstUtilCol + i * 3);
+    // double indent so it looks right in final formula :)
     return `
-    AND(
-      ISNUMBER($${streakCol}${topRow}), 
-      $${streakCol}${topRow}>=INDEX(${RANGE_LEVEL_STREAK},${i + 1})
-    )
-    ,INDEX(${RANGE_LEVEL_SCORES},${i + 1})`;
+      AND(ISNUMBER($${streakCol}${topRow}), 
+          $${streakCol}${topRow}>=INDEX(${RANGE_LEVEL_STREAK},${i + 1})
+          ), INDEX(${RANGE_LEVEL_SCORES},${i + 1})`;
   }).reverse().join(',');
-  const masteryFormulaRow = `=LET(combined, ${combinedBitsRow}, attempts, ${attemptsRow}, IFS(combined="","", attempts=0,"", ${partsRow}${partsRow ? ',' : ''}ISERROR(SEARCH("1", combined)),${RANGE_NONE_CORRECT_SCORE}, TRUE, ${RANGE_SOME_CORRECT_SCORE}))`;
+  const masteryFormulaRow = `=LET(
+    combined, ${combinedBitsRow}, 
+    attempts, ${attemptsRow}, 
+    IFS(
+      combined="","",
+      attempts=0,"",
+      ${partsRow}${partsRow ? ',' : ''}
+      ISERROR(SEARCH("1", combined)),${RANGE_NONE_CORRECT_SCORE}, 
+      TRUE, ${RANGE_SOME_CORRECT_SCORE}
+    )
+  )`;
   // Write top-row formula then autofill down for performance and correct relative-row behavior
   sh.getRange(topRow, masteryCol).setFormula(masteryFormulaRow);
   if (rowCount > 1) {
