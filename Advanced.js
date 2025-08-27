@@ -270,6 +270,13 @@ function populateDemoGrades() {
 
     const testCases = [
       { description: 'Symbol Coverage', attempts: ['1', '1o', '1s', 'X', 'Xo', 'Xs', 'P', 'G', 'H', 'N'] },
+      {
+        description: 'Empty Set', attempts: [
+          '', '', '', '', '',
+          '', '', '', '', '',
+          '', '', '', '', '',
+        ]
+      },
       { description: 'Should get 0s', attempts: ['x', 'x', 'x', 'x', 'x'] },
       { description: 'Should get 0s', attempts: ['x', 'P', 'G', 'H', 'N'] },
       { description: 'Should get 0s', attempts: ['x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x'] },
