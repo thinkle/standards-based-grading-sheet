@@ -162,34 +162,23 @@ function setupGradesFormulas_(sh, settings, ctx) {
   });
 
   // Mastery Grade formula (highest level whose streak threshold is met wins)
-  // combinedBits: concatenation of all per-level String columns for this row.
-  // If combinedBits is empty (no attempts mapped to bits), emit "" so downstream queries/AVG don't break.
-  const combinedBits = `TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
+  // Emit a straightforward A1-style LET formula for row 2 (easier to debug in-sheet).
+  const row = 2;
+  const combinedBitsRow = `TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
     const strCol = columnA1(firstUtilCol + i * 3 + 1);
-    return `INDEX(${strCol}:${strCol},ROW())`;
+    return `${strCol}${row}`;
   }).join(',')}} )`;
-  // noneCorrectCheck: detect if there are zero "1" bits across all per-level String columns for this row.
-  const noneCorrectCheck = `ISERROR(SEARCH("1", ${combinedBits}))`;
-  const parts = settings.codes
-    .map((_, i) => ({
-      // Compare this row’s streak for the level against that level’s required streak threshold.
-      cond: `INDEX(${columnA1(firstUtilCol + i * 3)}:${columnA1(firstUtilCol + i * 3)},ROW())>=INDEX(${RANGE_LEVEL_STREAK},${i + 1})`,
-      val: `INDEX(${RANGE_LEVEL_SCORES},${i + 1})`,
-    }))
-    .reverse(); // evaluate highest first
+  const attemptsRow = `COUNTA(${columnA1(firstAttemptCol)}${row}:ZZ${row})`;
+  const partsRow = settings.codes
+    .map((_, i) => {
+      const streakCol = columnA1(firstUtilCol + i * 3);
+      return `${streakCol}${row}>=INDEX(${RANGE_LEVEL_STREAK},${i + 1}),INDEX(${RANGE_LEVEL_SCORES},${i + 1})`;
+    })
+    .reverse()
+    .join(',');
 
-  // Build a LET-based mastery formula to reduce repetition and improve readability in-sheet.
-  const ifs = `=LET(combined, ${combinedBits}, attempts, COUNTA(${rowValsGeneric}), ` +
-    `IFS(` +
-    `combined="","",` +
-    `attempts=0,"",` +
-    parts.map(p => `${p.cond},${p.val}`).join(',') + (parts.length ? ',' : '') +
-    `ISERROR(SEARCH("1", combined)),${RANGE_NONE_CORRECT_SCORE},` +
-    `TRUE,${RANGE_SOME_CORRECT_SCORE}` +
-    `))`;
-
-  // Mastery Grade uses dynamic column index from ctx
-  sh.getRange(2, ctx.masteryCol).setFormula(ifs);
+  const ifsRow = `=LET(combined, ${combinedBitsRow}, attempts, ${attemptsRow}, IFS(combined="","", attempts=0,"", ${partsRow}${partsRow ? ',' : ''}ISERROR(SEARCH("1", combined)),${RANGE_NONE_CORRECT_SCORE}, TRUE, ${RANGE_SOME_CORRECT_SCORE}))`;
+  sh.getRange(2, ctx.masteryCol).setFormula(ifsRow);
 }
 
 /* -------------------- helpers -------------------- */
@@ -466,6 +455,17 @@ function reformatGradesSheet() {
   fillComputedFormulas_(sh, settings, layout);
 }
 
+/** Quickly re-insert computed formulas only (no formatting). */
+function reinsertGradesFormulas() {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ensureGradesSheet_(ss);
+  const settings = readLevelSettings_(ss);
+  const layout = computeGradesLayoutFromSettings_(settings);
+  // Only rewrite formulas across existing data rows; fast and non-destructive.
+  fillComputedFormulas_(sh, settings, layout);
+  ss.toast('Reinserted computed formulas.', 'Standards-Based Grading', 2);
+}
+
 /**
  * Normalize user edits in attempt cells to reduce validation friction.
  * - Trim spaces, uppercase letters (except keep '1' and digits),
@@ -619,51 +619,56 @@ function fillComputedFormulas_(sh, settings, layout) {
   const headerGeneric = `OFFSET(INDEX(${startA1}:${startA1},ROW()),(ROW()-1)*-1,0,1,COLUMNS(${startA1}:ZZ))`;
   const rowValsGeneric = `OFFSET(INDEX(${startA1}:${startA1},ROW()),0,0,1,COLUMNS(${startA1}:ZZ))`;
 
-  // Mastery Grade formulas for all rows
+  // Mastery Grade: emit a single readable A1 formula in row 2 that uses $ to lock columns
+  // (e.g. $J2). Then autofill down to populate all data rows. This produces standard
+  // sheet formulas that are easy to inspect and still fills quickly.
   const masteryCol = layout.masteryCol;
-  const masteryFormulas = new Array(rowCount);
-  // combinedBitsGeneric: concatenation of all per-level String columns for this row.
-  const combinedBitsGeneric = `TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
+  const topRow = startRow; // typically 2
+  const combinedBitsRow = `TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
     const strCol = columnA1(firstUtilCol + i * 3 + 1);
-    return `INDEX(${strCol}:${strCol},ROW())`;
+    return `$${strCol}${topRow}`; // lock column, allow row to change when autofilled
   }).join(',')}} )`;
-  // noneCorrectCheck: same concept as above, but expressed generically for a filled range.
-  const noneCorrectCheckGeneric = `ISERROR(SEARCH("1", ${combinedBitsGeneric}))`;
-  const partsGeneric = settings.codes.map((_, i) => {
+  const attemptsRowRef = `$${columnA1(firstAttemptCol)}${topRow}:ZZ${topRow}`;
+  const attemptsRow = `COUNTA(${attemptsRowRef})`;
+  const partsRow = settings.codes.map((_, i) => {
     const streakCol = columnA1(firstUtilCol + i * 3);
-    return `INDEX(${streakCol}:${streakCol},ROW())>=INDEX(${RANGE_LEVEL_STREAK},${i + 1}),INDEX(${RANGE_LEVEL_SCORES},${i + 1})`;
+    return `
+    AND(
+      ISNUMBER($${streakCol}${topRow}), 
+      $${streakCol}${topRow}>=INDEX(${RANGE_LEVEL_STREAK},${i + 1})
+    )
+    ,INDEX(${RANGE_LEVEL_SCORES},${i + 1})`;
   }).reverse().join(',');
-  const masteryFormulaGeneric = `=LET(combined, ${combinedBitsGeneric}, attempts, COUNTA(${rowValsGeneric}), IFS(combined="","", attempts=0,"", ${partsGeneric}${partsGeneric ? ',' : ''}ISERROR(SEARCH("1", combined)),${RANGE_NONE_CORRECT_SCORE}, TRUE, ${RANGE_SOME_CORRECT_SCORE}))`;
-  for (let r = 0; r < rowCount; r++) {
-    masteryFormulas[r] = [masteryFormulaGeneric];
+  const masteryFormulaRow = `=LET(combined, ${combinedBitsRow}, attempts, ${attemptsRow}, IFS(combined="","", attempts=0,"", ${partsRow}${partsRow ? ',' : ''}ISERROR(SEARCH("1", combined)),${RANGE_NONE_CORRECT_SCORE}, TRUE, ${RANGE_SOME_CORRECT_SCORE}))`;
+  // Write top-row formula then autofill down for performance and correct relative-row behavior
+  sh.getRange(topRow, masteryCol).setFormula(masteryFormulaRow);
+  if (rowCount > 1) {
+    const dest = sh.getRange(topRow, masteryCol, rowCount, 1);
+    sh.getRange(topRow, masteryCol).autoFill(dest, SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
   }
-  sh.getRange(startRow, masteryCol, rowCount, 1).setFormulas(masteryFormulas);
 
-  // Per-level Streak/String/Mastery display formulas
+  // Per-level Streak/String/Symbols: write a row-2 formula (with $-anchored columns where helpful)
+  // and autofill down so the sheet shows standard A1 formulas that increment rows when dragged.
   settings.codes.forEach((code, i) => {
     const streakCol = firstUtilCol + i * 3;
     const stringCol = streakCol + 1;
     const symbolsCol = streakCol + 2;
 
-    const streakArr = new Array(rowCount);
-    const stringArr = new Array(rowCount);
-    const symbolsArr = new Array(rowCount);
     const stringColLetter = columnA1(stringCol);
-    const stringCellGeneric = `INDEX(${stringColLetter}:${stringColLetter},ROW())`;
-    // Generic formulas used for each row of the filled ranges:
-    // - stringFormula: collect mastery bits for this level across attempts on the row
-    // - streakFormula: longest run of 1s
-    // - symbolsFormula: pretty symbol string for display
-    const stringFormulaGeneric = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0))),""))`;
-    const streakFormulaGeneric = `=IF(${stringCellGeneric}="","",MAX(ARRAYFORMULA(LEN(SPLIT(${stringCellGeneric},"0",FALSE,FALSE)))))`;
-    const symbolsFormulaGeneric = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-"))),""))`;
-    for (let r = 0; r < rowCount; r++) {
-      stringArr[r] = [stringFormulaGeneric];
-      streakArr[r] = [streakFormulaGeneric];
-      symbolsArr[r] = [symbolsFormulaGeneric];
+    const stringCellRef = `$${stringColLetter}${topRow}`;
+
+    const stringFormulaRow = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0))),""))`;
+    const streakFormulaRow = `=IF(${stringCellRef}="","",MAX(ARRAYFORMULA(LEN(SPLIT(${stringCellRef},"0",FALSE,FALSE)))))`;
+    const symbolsFormulaRow = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-")) ),""))`;
+
+    sh.getRange(topRow, stringCol).setFormula(stringFormulaRow);
+    sh.getRange(topRow, streakCol).setFormula(streakFormulaRow);
+    sh.getRange(topRow, symbolsCol).setFormula(symbolsFormulaRow);
+
+    if (rowCount > 1) {
+      sh.getRange(topRow, stringCol).autoFill(sh.getRange(topRow, stringCol, rowCount, 1), SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
+      sh.getRange(topRow, streakCol).autoFill(sh.getRange(topRow, streakCol, rowCount, 1), SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
+      sh.getRange(topRow, symbolsCol).autoFill(sh.getRange(topRow, symbolsCol, rowCount, 1), SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
     }
-    sh.getRange(startRow, stringCol, rowCount, 1).setFormulas(stringArr);
-    sh.getRange(startRow, streakCol, rowCount, 1).setFormulas(streakArr);
-    sh.getRange(startRow, symbolsCol, rowCount, 1).setFormulas(symbolsArr);
   });
 }
