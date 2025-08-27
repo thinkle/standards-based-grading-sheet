@@ -100,7 +100,7 @@ function setupGradeViewSheet(studentName) {
   const chooseCols = [3, 4, 5, masteryCol, ...symbolCols];
   const formula = `=IF($Z$2="","",
     CHOOSECOLS(
-      SORT(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2), 3, TRUE, 4, TRUE),
+      SORT(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2, Grades!F2:F<>""), 3, TRUE, 4, TRUE),
       ${chooseCols.join(',')}
     )
   )`;
@@ -181,14 +181,8 @@ function setupGradeViewSheet(studentName) {
   sh.getRange('I4:K4').setValues([['Unit', 'Average Grade', 'Skills']]).setFontWeight('bold').setBackground(headerBg);
   // Unit summary: average only numeric grades (ignore non-numeric like "-")
   sh.getRange('I5').setFormula(`=IF($Z$2="","",
-    QUERY(
-      FILTER(
-        { INDEX(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2),,3),
-          IFERROR(VALUE(INDEX(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2),,6)))
-        },
-        ISNUMBER(IFERROR(VALUE(INDEX(FILTER(Grades!A2:ZZ, Grades!B2:B=$Z$2),,6))))
-      ),
-      "select Col1, avg(Col2), count(Col2) group by Col1 order by Col1",
+    QUERY(A4:D,      
+      "select A, avg(D), count(D) group by A order by A",
       0
     )
   )`);
