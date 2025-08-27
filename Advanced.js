@@ -97,7 +97,7 @@ function populateDemoGrades() {
   if (!ss.getSheetByName('Students')) setupStudents();
   if (!ss.getSheetByName('Skills')) setupSkills();
   if (!ss.getSheetByName('Grades')) setupGradesSheet();
-  console.log(`Set up any necessary missing sheets, took ${new Date() - absoluteStart}ms)`);
+  console.log(`Set up any necessary missing sheets, took ${new Date() - absoluteStart}ms`);
 
   // Build Student x Skill grid in Grades
   //if (typeof populateGrades === 'function') populateGrades();
@@ -107,8 +107,8 @@ function populateDemoGrades() {
   const codes = ss.getRangeByName(RANGE_LEVEL_SHORTCODES).getValues().flat().filter(String);
   const defaultAttempts = ss.getRangeByName(RANGE_LEVEL_DEFAULTATTEMPTS).getValues().flat().slice(0, codes.length).map(n => Number(n || 0));
   console.log(`Read level settings, took ${new Date() - start}ms`);
-  const gradesSh = ss.getSheetByName('Grades');
-  const lastRow = gradesSh.getLastRow();
+  const gradesSheet = ss.getSheetByName('Grades');
+  const lastRow = gradesSheet.getLastRow();
   if (lastRow < 2) return;
 
   // Build symbol pools from Symbols sheet so we exercise everything teachers might enter
@@ -126,10 +126,10 @@ function populateDemoGrades() {
   if (failSymbols.length === 0) failSymbols.push('X');
 
   // Determine attempt columns region by header scan  
-  const headerRow = gradesSh.getRange(1, 1, 1, gradesSh.getLastColumn()).getValues()[0];
+  const headerRow = gradesSheet.getRange(1, 1, 1, gradesSheet.getLastColumn()).getValues()[0];
   const firstAttemptCol = headerRow.findIndex(h => /^([A-Za-z])1$/.test(String(h || ''))) + 1; // like B1, I1, M1
   if (firstAttemptCol <= 0) return;
-  const attemptWidth = gradesSh.getLastColumn() - firstAttemptCol + 1;
+  const attemptWidth = gradesSheet.getLastColumn() - firstAttemptCol + 1;
 
   // Offsets for each level's attempts across the row
   const levelOffsets = [];
@@ -177,7 +177,7 @@ function populateDemoGrades() {
   function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 
   // Batch-read columns A..E (Name, Email, Unit, Skill #, Descriptor) so we can skip empty rows
-  const rowsData = gradesSh.getRange(2, 1, rowCount, 5).getValues();
+  const rowsData = gradesSheet.getRange(2, 1, rowCount, 5).getValues();
   // Progress instrumentation
   const runStart = Date.now();
   let lastLog = runStart;
@@ -253,7 +253,7 @@ function populateDemoGrades() {
     if (console && console.log) console.log(`Writing ${rowCount}×${attemptWidth} attempt cells to sheet...`);
     const writeStart = Date.now();
     try {
-      gradesSh.getRange(2, firstAttemptCol, rowCount, attemptWidth).setValues(allRowValues);
+      gradesSheet.getRange(2, firstAttemptCol, rowCount, attemptWidth).setValues(allRowValues);
       if (console && console.log) console.log(`Write complete (${Math.round((Date.now() - writeStart) / 1000)}s).`);
     } catch (e) {
       if (console && console.log) console.log(`Error writing attempts: ${e && e.message}`);
@@ -262,24 +262,98 @@ function populateDemoGrades() {
   }
   console.log('Pushed grades to sheet in ', new Date() - start);
   start = new Date();
-  // Coverage pass: ensure every symbol from the Symbols sheet appears at least once
-  const ensureSymbols = masterySymbols.concat(failSymbols).filter(Boolean);
-  if (ensureSymbols.length && attemptWidth > 0 && rowCount > 0) {
-    // Place missing symbols in the attempt area; number of placements is small so per-cell writes are acceptable
-    let rr = 2, cc = firstAttemptCol;
-    if (console && console.log) console.log(`Ensuring coverage for ${ensureSymbols.length} symbols...`);
-    for (const sym of ensureSymbols) {
-      if (!usedSymbols[sym]) {
-        gradesSh.getRange(rr, cc).setValue(sym);
-        markUsed(sym);
-        cc++;
-        if (cc > firstAttemptCol + attemptWidth - 1) { cc = firstAttemptCol; rr++; if (rr > lastRow) rr = 2; }
-      }
-    }
-    if (console && console.log) console.log(`Coverage placements complete.`, new Date() - start);
+  // Replace the "Coverage" pass with structured test cases
+  function populateTestCases() {
+    const ss = SpreadsheetApp.getActive();
+    const gradesTestSheet = ss.getSheetByName('Grades');
+    if (!gradesTestSheet) return;
+
+    const testCases = [
+      { description: 'Symbol Coverage', attempts: ['1', '1o', '1s', 'X', 'Xo', 'Xs', 'P', 'G', 'H', 'N'] },
+      { description: 'Should get 0s', attempts: ['x', 'x', 'x', 'x', 'x'] },
+      { description: 'Should get 0s', attempts: ['x', 'P', 'G', 'H', 'N'] },
+      { description: 'Should get 0s', attempts: ['x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x'] },
+      { description: 'Should get 0s', attempts: ['x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x'] },
+      { description: 'Should get 1s', attempts: ['x', '1', 'x', '1o', 'x'] },
+      { description: 'Should get 1s', attempts: ['1s', 'x', '1', 'x', '1o', 'x', 'x', '1', 'x', '1o', 'x'] },
+      { description: 'Should get 2s', attempts: ['x', 'x', '1', '1', 'x'] },
+      {
+        description: 'Should get 2s', attempts: ['1o', '1s', '1', '1', 'x',
+          'x', '1', 'x', '1', 'x',
+        ]
+      },
+      {
+        description: 'Should get 2s', attempts: ['x', 'x', 'x', '1', '1o',
+          'x', '1', 'x', '1', 'x',
+          'N', '1', 'N', '1', 'N',
+        ]
+      },
+      {
+        description: 'Should get 3s', attempts: [
+          '1', '1', 'x', '1', 'x',
+          '1', '1', 'x', '1', 'x',
+        ]
+      }, {
+        description: 'Should get 3s', attempts: [
+          'x', '1', 'x', '1', 'x',
+          'x', '1', 'x', '1', '1s',
+          'N', '1', 'N', '1', 'N',
+        ]
+      },
+      {
+        description: 'Should get 4s', attempts: [
+          '1', '1', '1', '1', '1',
+          '1', '1', '1', '1', '1',
+          '1', '1', '1', '1', '1'
+        ]
+      },
+      {
+        description: 'Should get 4s', attempts: [
+          '', '', '', '', '',
+          '1', 'x', 'G', '1s', 'x',
+          'H', 'G', 'P', '1o', '1s'
+        ]
+      },
+      {
+        description: 'Should get 4s', attempts: [
+          'N', 'N', 'N', 'H', 'G',
+          'N', 'x', 'G', '1s', '1',
+          'H', 'G', 'P', '1o', '1s'
+        ]
+      },
+    ];
+
+    const firstAttemptCol = gradesTestSheet.getRange(1, 1, 1, gradesTestSheet.getLastColumn())
+      .getValues()[0]
+      .findIndex(h => /^([A-Za-z])1$/.test(String(h || ''))) + 1;
+    if (firstAttemptCol <= 0) return;
+
+    const attemptWidth = gradesTestSheet.getLastColumn() - firstAttemptCol + 1;
+    const rowCount = testCases.length;
+
+    // Populate test cases in the first n rows
+    testCases.forEach((testCase, index) => {
+      const row = index + 2; // Start from row 2
+      const rowValues = new Array(attemptWidth).fill('');
+      testCase.attempts.forEach((value, colIndex) => {
+        if (colIndex < attemptWidth) {
+          rowValues[colIndex] = value;
+        }
+      });
+      gradesTestSheet.getRange(row, firstAttemptCol, 1, attemptWidth).setValues([rowValues]);
+    });
+
+    console.log(`Populated ${rowCount} test cases.`);
   }
 
-  // Make sure formats are correct (text) so digits don’t coerce
+  // Call the new function in place of the "Coverage" pass
+  const gradesDemoSheet = ss.getSheetByName('Grades');
+  if (!gradesDemoSheet) return;
+
+  // Replace the "Coverage" pass with test cases
+  populateTestCases();
+
+  // Ensure key entry columns are plain text
   try { repairTextFormats(); } catch (e) { if (console && console.warn) console.warn('repairTextFormats() failed after populateDemoGrades', e); }
 }
 
