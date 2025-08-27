@@ -18,7 +18,10 @@ function setupGradesSheet() {
   const sh = ensureGradesSheet_(ss);
 
   const ctx = setupGradesHeaders_(sh, settings); // (1) headers
-  setupGradesFormulas_(sh, settings, ctx);       // (2) formulas
+  setupGradesFormulas_(sh, settings, ctx);       // (2) prepare formula templates
+  // Populate computed formulas across existing data rows once (centralized).
+  const layout = computeGradesLayoutFromSettings_(settings);
+  fillComputedFormulas_(sh, settings, layout);
 
   // Basic sheet niceties (frozen header + autoresize + fonts)
   sh.setFrozenRows(1);
@@ -119,66 +122,18 @@ function setupGradesHeaders_(sh, settings) {
  *   Otherwise emit the configured "some correct" score.
  */
 function setupGradesFormulas_(sh, settings, ctx) {
-  const { firstUtilCol, firstAttemptCol, lastCol } = ctx;
-
-  // Shared A1 ranges for header row (1) and first data row (2)
-  // Use ROW()-relative OFFSET/INDEX so formulas tolerate sorting and Table views.
-  const startA1 = columnA1(firstAttemptCol);
-  // Header vector for the current row: first row above this row, across all attempt columns
-  const headerGeneric = `OFFSET(INDEX(${startA1}:${startA1},ROW()),(ROW()-1)*-1,0,1,COLUMNS(${startA1}:ZZ))`;
-  // Current row attempt values across all attempt columns (expands to new columns automatically)
-  const rowValsGeneric = `OFFSET(INDEX(${startA1}:${startA1},ROW()),0,0,1,COLUMNS(${startA1}:ZZ))`;
-
-  // Per-level String (mastery bits) and Streak formulas into row 2
-  settings.codes.forEach((code, i) => {
-    const streakCol = firstUtilCol + i * 3;
+  const layout = computeGradesLayoutFromSettings_(settings);
+  const formulas = generateAllFormulas(settings, layout, 2);
+  // Apply formulas to the sheet (row 2 as template)
+  sh.getRange(2, layout.masteryCol).setFormula(formulas.mastery);
+  settings.codes.forEach((_, i) => {
+    const streakCol = layout.firstUtilCol + i * 3;
     const stringCol = streakCol + 1;
     const symbolsCol = streakCol + 2;
-
-    // Map symbol chars in attempt cells to mastery bits using the Symbols table.
-    // We FILTER the current row of attempt values by headers matching this level’s prefix (e.g., "^B").
-    // Then XLOOKUP the symbols to their mastery bits and TEXTJOIN into a bitstring for streak analysis.
-    const stringFormula =
-      `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},` +
-      `IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(` +
-      `XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0)` +
-      `)),""))`;
-    sh.getRange(2, stringCol).setFormula(stringFormula);
-
-    // Longest run of 1s in the per-level string. We split on 0 (treating 0 as a divider),
-    // measure each run’s length, and take the maximum. Empty string -> no streak.
-    const stringCellA1 = `${columnA1(stringCol)}2`;
-    const streakFormula = `=IF(${stringCellA1}="","",MAX(ARRAYFORMULA(LEN(SPLIT(${stringCellA1},"0",FALSE,FALSE)))))`;
-    sh.getRange(2, streakCol).setFormula(streakFormula);
-
-    // Symbols: join the display symbols (e.g., ✓ ✗) corresponding to attempts for this level
-    // to provide a compact visual summary in the utility area.
-    const symbolsFormula =
-      `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},` +
-      `IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(` +
-      `XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-")` +
-      `)),""))`;
-    sh.getRange(2, symbolsCol).setFormula(symbolsFormula);
+    sh.getRange(2, stringCol).setFormula(formulas.strings[i]);
+    sh.getRange(2, streakCol).setFormula(formulas.streaks[i]);
+    sh.getRange(2, symbolsCol).setFormula(formulas.symbols[i]);
   });
-
-  // Mastery Grade formula (highest level whose streak threshold is met wins)
-  // Emit a straightforward A1-style LET formula for row 2 (easier to debug in-sheet).
-  const row = 2;
-  const combinedBitsRow = `TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
-    const strCol = columnA1(firstUtilCol + i * 3 + 1);
-    return `${strCol}${row}`;
-  }).join(',')}} )`;
-  const attemptsRow = `COUNTA(${columnA1(firstAttemptCol)}${row}:ZZ${row})`;
-  const partsRow = settings.codes
-    .map((_, i) => {
-      const streakCol = columnA1(firstUtilCol + i * 3);
-      return `${streakCol}${row}>=INDEX(${RANGE_LEVEL_STREAK},${i + 1}),INDEX(${RANGE_LEVEL_SCORES},${i + 1})`;
-    })
-    .reverse()
-    .join(',');
-
-  const ifsRow = `=LET(combined, ${combinedBitsRow}, attempts, ${attemptsRow}, IFS(combined="","", attempts=0,"", ${partsRow}${partsRow ? ',' : ''}ISERROR(SEARCH("1", combined)),${RANGE_NONE_CORRECT_SCORE}, TRUE, ${RANGE_SOME_CORRECT_SCORE}))`;
-  sh.getRange(2, ctx.masteryCol).setFormula(ifsRow);
 }
 
 /* -------------------- helpers -------------------- */
@@ -614,70 +569,133 @@ function fillComputedFormulas_(sh, settings, layout) {
   const rowCount = Math.max(0, endRow - startRow + 1);
   if (rowCount <= 0) return;
 
-  // Precompute header attempt A1 range (row 1) once
+  const formulas = generateAllFormulas(settings, layout, startRow);
+  sh.getRange(startRow, layout.masteryCol).setFormula(formulas.mastery);
+  if (rowCount > 1) {
+    const dest = sh.getRange(startRow, layout.masteryCol, rowCount, 1);
+    sh.getRange(startRow, layout.masteryCol).autoFill(dest, SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
+  }
+
+  settings.codes.forEach((_, i) => {
+    const streakCol = layout.firstUtilCol + i * 3;
+    const stringCol = streakCol + 1;
+    const symbolsCol = streakCol + 2;
+
+    sh.getRange(startRow, stringCol).setFormula(formulas.strings[i]);
+    sh.getRange(startRow, streakCol).setFormula(formulas.streaks[i]);
+    sh.getRange(startRow, symbolsCol).setFormula(formulas.symbols[i]);
+
+    if (rowCount > 1) {
+      sh.getRange(startRow, stringCol).autoFill(sh.getRange(startRow, stringCol, rowCount, 1), SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
+      sh.getRange(startRow, streakCol).autoFill(sh.getRange(startRow, streakCol, rowCount, 1), SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
+      sh.getRange(startRow, symbolsCol).autoFill(sh.getRange(startRow, symbolsCol, rowCount, 1), SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
+    }
+  });
+}
+
+/**
+ * Generate all formulas (Mastery, Streak, String, Symbols) for a given row.
+ * Reusable helper for formula setup and filling.
+ */
+function generateAllFormulas(settings, layout, row) {
+  const { firstUtilCol, firstAttemptCol } = layout;
   const startA1 = columnA1(firstAttemptCol);
   const headerGeneric = `OFFSET(INDEX(${startA1}:${startA1},ROW()),(ROW()-1)*-1,0,1,COLUMNS(${startA1}:ZZ))`;
   const rowValsGeneric = `OFFSET(INDEX(${startA1}:${startA1},ROW()),0,0,1,COLUMNS(${startA1}:ZZ))`;
 
-  // Mastery Grade: emit a single readable A1 formula in row 2 that uses $ to lock columns
-  // (e.g. $J2). Then autofill down to populate all data rows. This produces standard
-  // sheet formulas that are easy to inspect and still fills quickly.
-  const masteryCol = layout.masteryCol;
-  const topRow = startRow; // typically 2
+  const formulas = {
+    mastery: null,
+    streaks: [],
+    strings: [],
+    symbols: []
+  };
+
+  // Mastery Grade formula
   const combinedBitsRow = `TEXTJOIN("", TRUE, {${settings.codes.map((_, i) => {
     const strCol = columnA1(firstUtilCol + i * 3 + 1);
-    return `$${strCol}${topRow}`; // lock column, allow row to change when autofilled
+    return `$${strCol}${row}`;
   }).join(',')}} )`;
-  const attemptsRowRef = `$${columnA1(firstAttemptCol)}${topRow}:ZZ${topRow}`;
+  const attemptsRowRef = `$${columnA1(firstAttemptCol)}${row}:ZZ${row}`;
   const attemptsRow = `COUNTA(${attemptsRowRef})`;
-  const partsRow = settings.codes.map((_, i) => {
+  const varPairsTop = settings.codes.map((_, i) => {
+    const idx = i + 1;
     const streakCol = columnA1(firstUtilCol + i * 3);
-    // double indent so it looks right in final formula :)
-    return `
-      AND(ISNUMBER($${streakCol}${topRow}), 
-          $${streakCol}${topRow}>=INDEX(${RANGE_LEVEL_STREAK},${i + 1})
-          ), INDEX(${RANGE_LEVEL_SCORES},${i + 1})`;
-  }).reverse().join(',');
-  const masteryFormulaRow = `=LET(
-    combined, ${combinedBitsRow}, 
-    attempts, ${attemptsRow}, 
-    IFS(
-      combined="","",
-      attempts=0,"",
-      ${partsRow}${partsRow ? ',' : ''}
-      ISERROR(SEARCH("1", combined)),${RANGE_NONE_CORRECT_SCORE}, 
-      TRUE, ${RANGE_SOME_CORRECT_SCORE}
-    )
-  )`;
-  // Write top-row formula then autofill down for performance and correct relative-row behavior
-  sh.getRange(topRow, masteryCol).setFormula(masteryFormulaRow);
-  if (rowCount > 1) {
-    const dest = sh.getRange(topRow, masteryCol, rowCount, 1);
-    sh.getRange(topRow, masteryCol).autoFill(dest, SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
-  }
+    const earnsExpr = `AND(IFERROR(ISNUMBER(VALUE($${streakCol}${row})),FALSE), VALUE($${streakCol}${row})>=INDEX(${RANGE_LEVEL_STREAK},${idx}))`;
+    const scoreExpr = `INDEX(${RANGE_LEVEL_SCORES},${idx})`;
+    return { earnsName: `earns${idx}`, earnsExpr, scoreName: `score${idx}`, scoreExpr };
+  });
+  const letPairsTop = varPairsTop.map(v => `${v.earnsName}, ${v.earnsExpr}, ${v.scoreName}, ${v.scoreExpr}`).join(',\n  ');
+  const ifsChecksTop = varPairsTop.slice().reverse().map(v => `${v.earnsName}, ${v.scoreName}`).join(', ');
+  formulas.mastery = `=LET(
+  combined, ${combinedBitsRow}, 
+  attempts, ${attemptsRow}, 
+  ${letPairsTop}, 
+  hasNoneRight, ISERROR(SEARCH("1", combined)),
+  IFS(
+    combined="","",
+    attempts=0,"",
+    ${ifsChecksTop}${ifsChecksTop ? ', ' : ''}
+    hasNoneRight, ${RANGE_NONE_CORRECT_SCORE}, 
+    TRUE, ${RANGE_SOME_CORRECT_SCORE}
+  ))`;
 
-  // Per-level Streak/String/Symbols: write a row-2 formula (with $-anchored columns where helpful)
-  // and autofill down so the sheet shows standard A1 formulas that increment rows when dragged.
+  // Per-level Streak/String/Symbols formulas
   settings.codes.forEach((code, i) => {
     const streakCol = firstUtilCol + i * 3;
     const stringCol = streakCol + 1;
     const symbolsCol = streakCol + 2;
 
-    const stringColLetter = columnA1(stringCol);
-    const stringCellRef = `$${stringColLetter}${topRow}`;
+    const stringFormula = `=LET(
+  hdr, ${headerGeneric}, 
+  rowvals, ${rowValsGeneric},
+  IFERROR(
+    TEXTJOIN("",TRUE,
+      ARRAYFORMULA(
+        XLOOKUP(
+          FILTER(
+            rowvals,
+            REGEXMATCH(hdr, "^"&"${code}"), 
+            rowvals<>""),
+          ${RANGE_SYMBOL_CHARS}, 
+          ${RANGE_SYMBOL_MASTERY}, 
+          0
+        )
+      )
+    ),
+    ""
+  )
+)`;
+    const streakFormula = `=IF(
+  $${columnA1(stringCol)}${row}="",
+  "",
+  MAX(
+    ARRAYFORMULA(
+      LEN(SPLIT($${columnA1(stringCol)}${row},"0",FALSE,FALSE))
+    )
+  )
+)`;
+    const symbolsFormula = `=LET(
+  hdr, ${headerGeneric}, 
+  rowvals, ${rowValsGeneric},
+  IFERROR(
+    TEXTJOIN("",TRUE,
+      ARRAYFORMULA(
+        XLOOKUP(
+          FILTER(rowvals,
+          REGEXMATCH(hdr, "^"&"${code}"), 
+          rowvals<>""),
+        ${RANGE_SYMBOL_CHARS}, 
+        ${RANGE_SYMBOL_SYMBOL}, 
+        "-"
+      )
+    )
+  ),""
+))`;
 
-    const stringFormulaRow = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_MASTERY}, 0))),""))`;
-    const streakFormulaRow = `=IF(${stringCellRef}="","",MAX(ARRAYFORMULA(LEN(SPLIT(${stringCellRef},"0",FALSE,FALSE)))))`;
-    const symbolsFormulaRow = `=LET(hdr, ${headerGeneric}, rowvals, ${rowValsGeneric},IFERROR(TEXTJOIN("",TRUE,ARRAYFORMULA(XLOOKUP(FILTER(rowvals, REGEXMATCH(hdr, "^"&"${code}"), rowvals<>""), ${RANGE_SYMBOL_CHARS}, ${RANGE_SYMBOL_SYMBOL}, "-")) ),""))`;
-
-    sh.getRange(topRow, stringCol).setFormula(stringFormulaRow);
-    sh.getRange(topRow, streakCol).setFormula(streakFormulaRow);
-    sh.getRange(topRow, symbolsCol).setFormula(symbolsFormulaRow);
-
-    if (rowCount > 1) {
-      sh.getRange(topRow, stringCol).autoFill(sh.getRange(topRow, stringCol, rowCount, 1), SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
-      sh.getRange(topRow, streakCol).autoFill(sh.getRange(topRow, streakCol, rowCount, 1), SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
-      sh.getRange(topRow, symbolsCol).autoFill(sh.getRange(topRow, symbolsCol, rowCount, 1), SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
-    }
+    formulas.strings.push(stringFormula);
+    formulas.streaks.push(streakFormula);
+    formulas.symbols.push(symbolsFormula);
   });
+
+  return formulas;
 }
