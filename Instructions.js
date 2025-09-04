@@ -1,3 +1,4 @@
+/* Instructions.js Last Update 2025-08-24 21:11:31 <e34733e35b5ef0601d7431ddfea6d5cf452e3cd8ec8b7cfe2c6e4794caa3b00b>
 /* eslint-disable no-unused-vars */
 /* global getCellUrl, getSheetUrl, setRichInstructions, SpreadsheetApp,
   SHEET_SYMBOLS, SHEET_LEVELSETTINGS, MENU

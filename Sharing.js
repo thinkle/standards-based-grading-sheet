@@ -1,3 +1,4 @@
+/* Sharing.js Last Update 2025-08-23 09:45:55 <63aeabbd3526c2fdd4cfed3c36a69ea80d6bd2da7ac1effc3b15da24d5b9fad6>
 /* eslint-disable no-unused-vars */
 /* exported generateStudentViews, shareStudentViews */
 /* global SpreadsheetApp, DriveApp, Session, STYLE, setupGradeViewSheet, RANGE_STUDENT_NAMES, RANGE_STUDENT_EMAILS, safeSheetName_ */
