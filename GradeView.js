@@ -181,7 +181,7 @@ function setupGradeViewSheet(studentName) {
   sh.getRange('I4:K4').setValues([['Unit', 'Average Grade', 'Skills']]).setFontWeight('bold').setBackground(headerBg);
   // Unit summary: average only numeric grades (ignore non-numeric like "-")
   sh.getRange('I5').setFormula(`=IF($Z$2="","",
-    QUERY(A4:D,      
+    QUERY(A5:D,      
       "select A, avg(D), count(D) group by A order by A",
       0
     )
