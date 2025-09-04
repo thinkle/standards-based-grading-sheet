@@ -32,6 +32,10 @@ function setupGradeViewSheet(studentName) {
   const levelStreak = ss.getRangeByName(RANGE_LEVEL_STREAK).getValues().flat().slice(0, levelNames.length);
   const levelScores = ss.getRangeByName(RANGE_LEVEL_SCORES).getValues().flat().slice(0, levelNames.length);
 
+  // Calculate dynamic column positions based on levels
+  const tableColCount = 4 + levelNames.length; // Base: Unit(1), Skill#(2), Desc(3), Grade(4) + attempts(5+)
+  const summaryStartCol = tableColCount + 2; // Start summary after table with 1 spacer column
+
   // Layout constants matching Grades sheet
   const baseHeadersCount = 6; // Name, Email, Unit, Skill #, Skill Description, Mastery Grade
   const firstUtilCol = baseHeadersCount + 1; // util starts after base
@@ -115,8 +119,8 @@ function setupGradeViewSheet(studentName) {
     const helperStartRow = subHeaderRow + 1;
     // compute where the table ends so helper columns are placed just after it
     const lastTableCol = tableHeaders.length; // number of columns in the presented table
-    // ensure helper columns don't overlap the Unit Summary (I:K). Start at least at column 12 (L).
-    const minHelperStart = 12;
+    // ensure helper columns don't overlap the Unit Summary. Start at least at summaryStartCol + 3.
+    const minHelperStart = summaryStartCol + 3;
     const helperCol1 = Math.max(lastTableCol + 1, minHelperStart); // first helper column (right after table or after summary)
 
     // ensure sheet has enough columns
@@ -176,22 +180,22 @@ function setupGradeViewSheet(studentName) {
   sh.setColumnWidth(6, 180);
   sh.setColumnWidth(7, 180);
 
-  // Optional: Unit summary to the right (I:K) — moved up one row
-  sh.getRange('I3').setValue('Unit Summary').setFontWeight('bold');
-  sh.getRange('I4:K4').setValues([['Unit', 'Average Grade', 'Skills']]).setFontWeight('bold').setBackground(headerBg);
+  // Optional: Unit summary to the right (dynamic position based on levels)
+  sh.getRange(3, summaryStartCol).setValue('Unit Summary').setFontWeight('bold');
+  sh.getRange(4, summaryStartCol, 1, 3).setValues([['Unit', 'Average Grade', 'Skills']]).setFontWeight('bold').setBackground(headerBg);
   // Unit summary: average only numeric grades (ignore non-numeric like "-")
-  sh.getRange('I5').setFormula(`=IF($Z$2="","",
+  sh.getRange(5, summaryStartCol).setFormula(`=IF($Z$2="","",
     QUERY(A5:D,      
       "select A, avg(D), count(D) group by A order by A",
       0
     )
   )`);
-  sh.setColumnWidth(9, 120);  // I
-  sh.setColumnWidth(10, 120); // J
-  sh.setColumnWidth(11, 90);  // K
-  // Format averages in J to two decimals (now J5:J)
+  sh.setColumnWidth(summaryStartCol, 120);     // Dynamic: Unit
+  sh.setColumnWidth(summaryStartCol + 1, 120); // Dynamic: Average Grade
+  sh.setColumnWidth(summaryStartCol + 2, 90);  // Dynamic: Skills
+  // Format averages in the dynamic Average Grade column to two decimals
   try {
-    const avgColRange = sh.getRange(5, 10, Math.max(1, sh.getMaxRows() - 4), 1); // J5:J
+    const avgColRange = sh.getRange(5, summaryStartCol + 1, Math.max(1, sh.getMaxRows() - 4), 1);
     avgColRange.setNumberFormat('0.00');
   } catch (e) { /* formatting best-effort */ }
 
