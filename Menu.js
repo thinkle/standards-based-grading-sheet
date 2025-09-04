@@ -10,11 +10,11 @@ writePostSetupInstructions */
 const MENU = {
   TITLE: 'Standards-Based Grading',
   SETUP: 'Initial setup',
-  REGENERATE_INSTRUCTIONS: 'Regenerate Instructions',
-  SETUP_GRADE_SHEET: 'Setup Grade Sheet',
-  REFORMAT_GRADES: 'Reformat Grades (no content)',
-  ADD_STUDENTS_AND_SKILLS: 'Add Students & Skills',
-  SETUP_GRADE_VIEW: 'Setup Grade View',
+  REGENERATE_INSTRUCTIONS: 'Generate Instructions Sheet',
+  SETUP_GRADE_SHEET: 'Setup Grade Sheet (Editable)',
+  REFORMAT_GRADES: 'Reformat Grades (no contents will change)',
+  ADD_STUDENTS_AND_SKILLS: 'Add Students & Skills (Rerun when adding new students/skills)',
+  SETUP_GRADE_VIEW: 'Setup Grade View (Read Only)',
   GENERATE_STUDENT_VIEWS: 'Generate student views',
   SHARE_STUDENT_VIEWS: 'Share student views',
   GENERATE_UNIT_OVERVIEW: 'Create Unit Overview (Averages)'
@@ -23,21 +23,22 @@ const MENU = {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   const main = ui.createMenu(MENU.TITLE)
-    .addItem(MENU.SETUP, 'doInitialSetup')
     .addItem(MENU.REGENERATE_INSTRUCTIONS, 'writePostSetupInstructions') // dev only
-    .addSeparator()
+    .addItem(MENU.SETUP, 'doInitialSetup')
     .addItem(MENU.SETUP_GRADE_SHEET, 'setupGradeSheet')
-    .addItem(MENU.REFORMAT_GRADES, 'reformatGradesSheet')
+    .addSeparator()
     .addItem(MENU.ADD_STUDENTS_AND_SKILLS, 'addStudentsAndSkills')
+    .addSeparator()
+    .addItem(MENU.REFORMAT_GRADES, 'reformatGradesSheet')
+    .addSeparator()
     .addItem(MENU.SETUP_GRADE_VIEW, 'setupGradeViewSheet')
     .addItem(MENU.GENERATE_UNIT_OVERVIEW, 'createUnitOverview')
-    .addSeparator()
     .addItem(MENU.GENERATE_STUDENT_VIEWS, 'generateStudentViews')
     .addItem(MENU.SHARE_STUDENT_VIEWS, 'shareStudentViews');
 
 
   // Advanced submenu
-  const adv = ui.createMenu('Advanced')
+  const adv = ui.createMenu('Advanced/Testing')
     .addItem('Nuke! (delete all sheets except Instructions)', 'nukeAllSheetsExceptInstructions')
     .addSeparator()
     .addItem('Populate Demo Students', 'populateDemoStudents')
