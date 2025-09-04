@@ -1,3 +1,4 @@
+/* Settings.js Last Update 2025-09-04 16:27 <99f9831b6cfa6414e79d1b11eecd8a5c29d46588ce88330d512229d5293bd2db>
 /** 
  * Standards Based Grading Sheet
  * 

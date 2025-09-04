@@ -1,3 +1,4 @@
+/* RichText.js Last Update 2025-09-04 16:27 <59a35831b9eab9545765bddce8ea4f14897d0241d61a3d62453cffd1cc083630>
 /* eslint-disable no-unused-vars */
 /* exported setRichInstructions, getCellUrl, getSheetUrl, escapeBareAmpersands_ */
 /* global SpreadsheetApp, XmlService, STYLE */
