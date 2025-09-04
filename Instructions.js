@@ -118,15 +118,15 @@ function writePostSetupInstructions() {
     <li><b>Symbol:</b> What displays in reports and student views</li>
     <p><i>Remember: students will need to show a "streak" of mastery in order to demonstrate proficiency
         and earn credit for each level.</i></p>
-    <p>You can customize the symbols on the <b><a href="${getSheetUrl(ss.getSheetByName(SHEET_SYMBOLS))}">Symbols sheet</a></b>.</p>
+    <p>You can customize the symbols on the <b>${ss.getSheetByName(SHEET_SYMBOLS) ? `<a href="${getSheetUrl(ss.getSheetByName(SHEET_SYMBOLS))}">Symbols sheet</a>` : 'Symbols sheet'}</b>.</p>
     <h4>Default Symbol System:</h4>
     <p>When you first run the set-up, we will give you the default symbol system described in
     the BTC Grading Rubric with easy to type shorthands.</p>
     <h5>Successful Attempts (Count Toward Mastery):</h5>
-    <li><code>1</code> <b>✔</b> - KDI (Knowledge Demonstrated Individually)</li>
-    <li><code>1o</code> <b>✔o</b> - KDI via teacher Observation</li>
-    <li><code>1c</code> <b>✔c</b> - KDI via Conversation with teacher</li>
-    <li><code>1s</code> <b>✔s</b> - KDI with a Silly mistake not related to the objective</li>
+    <li><code>C</code> <b>✔</b> - KDI (Knowledge Demonstrated Individually)</li>
+    <li><code>Co</code> <b>✔o</b> - KDI via teacher Observation</li>
+    <li><code>Cc</code> <b>✔c</b> - KDI via Conversation with teacher</li>
+    <li><code>Cs</code> <b>✔s</b> - KDI with a Silly mistake not related to the objective</li>
     <h5>Learning Attempts (Do Not Count Toward Mastery):</h5>
     <li><code>H</code> <b>H</b> - Knowledge Demonstrated with Help from a teacher or peer</li>
     <li><code>G</code> <b>G</b> - Knowledge demonstrated in a Group setting</li>

@@ -109,9 +109,10 @@ function setupSymbols() {
     const demo = [
       // Add symbols: this taxonomy comes
       // from BTC (see https://sites.google.com/brzmath.com/btcrubric)
-      ['1', 1, '✓'],
-      ['1o', 1, '✓o'],
-      ['1s', 1, '✓s'],
+      ['C', 1, '✓'],
+      ['Co', 1, '✓o'],
+      ['Cc', 1, '✓c'],
+      ['Cs', 1, '✓s'],
       ['X', 0, '✗'],
       ['Xo', 0, '✗o'],
       ['Xs', 0, '✗s'],
