@@ -1,4 +1,4 @@
-/* Settings.js Last Update 2025-08-24 22:24:46 <0d89dbbdf9f16296781a5bd12993a98004bb1be17f04b46cbc914841dfa065ff>
+/* Settings.js Last Update 2025-09-05 09:20 <a055024635d54175103882a8666b80e892e632ccde08785d71d9e0cda12cddbd>
 /** 
  * Standards Based Grading Sheet
  * 
@@ -35,6 +35,26 @@ const RANGE_FALLBACK_SCORES = 'FallbackScores';
 // NEW named ranges for individual fallback scores
 const RANGE_NONE_CORRECT_SCORE = 'NoneCorrectScore';
 const RANGE_SOME_CORRECT_SCORE = 'SomeCorrectScore';
+
+/**
+ * Default grading symbols used for seeding the Symbols sheet and test data.
+ */
+const DEFAULT_GRADING_SYMBOLS = [
+  // Add symbols: this taxonomy comes
+  // from BTC (see https://sites.google.com/brzmath.com/btcrubric)
+  ['C', 1, '✓'],
+  ['Co', 1, '✓o'], // observed
+  ['Cc', 1, '✓c'],  // conversation with teacher      
+  ['Cs', 1, '✓s'], // with silly mistake
+  ['X', 0, '✗'],
+  ['Xo', 0, '✗o'],
+  ['Xs', 0, '✗s'],
+  // Partially correct, Group, Help display glyphs
+  ['P', 0, '◐'], // Partially Correct
+  ['G', 0, 'ⓖ'], // Group
+  ['H', 0, 'ⓗ'], // Help
+  ['N', 0, 'N'],
+];
 
 /* ---------- SETUP FUNCTIONS ---------- */
 function setupNamedRanges() {
@@ -107,23 +127,7 @@ function setupSymbols() {
 
   // seed rows if empty
   if (sh.getLastRow() < 2) {
-    const demo = [
-      // Add symbols: this taxonomy comes
-      // from BTC (see https://sites.google.com/brzmath.com/btcrubric)
-      ['C', 1, '✓'],
-      ['Co', 1, '✓o'],
-      ['Cc', 1, '✓c'],
-      ['Cs', 1, '✓s'],
-      ['X', 0, '✗'],
-      ['Xo', 0, '✗o'],
-      ['Xs', 0, '✗s'],
-      // Partially correct, Group, Help display glyphs
-      ['P', 0, '◐'], // Partially Correct
-      ['G', 0, 'ⓖ'], // Group
-      ['H', 0, 'ⓗ'], // Help
-      ['N', 0, 'N'],
-    ];
-    sh.getRange(2, 1, demo.length, 3).setValues(demo);
+    sh.getRange(2, 1, DEFAULT_GRADING_SYMBOLS.length, 3).setValues(DEFAULT_GRADING_SYMBOLS);
   }
 
   // named ranges (open-ended)

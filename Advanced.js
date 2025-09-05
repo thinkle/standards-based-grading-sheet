@@ -1,4 +1,4 @@
-/* Advanced.js Last Update 2025-08-27 13:36:54 <603e14dfd250495677e7609c21f246bae9f01744bc71fdd7551e0c700f488af6>
+/* Advanced.js Last Update 2025-09-05 09:21 <ffd51b025081c08382ae67d4143d22dfaea6142942261c6ec12e40017ba40dfe>
 /* eslint-disable no-unused-vars */
 /* exported nukeAllSheetsExceptInstructions, populateDemoStudents, populateDemoSkills, populateDemoGrades, runDemoSetup */
 /* exported repairTextFormats */
@@ -123,10 +123,8 @@ function populateDemoGrades() {
     if (!ch) continue;
     if (symbolMastery[i] === 1) masterySymbols.push(ch); else failSymbols.push(ch);
   }
-  if (masterySymbols.length === 0) masterySymbols.push('1');
-  if (failSymbols.length === 0) failSymbols.push('X');
-
-  // Determine attempt columns region by header scan  
+  if (masterySymbols.length === 0) DEFAULT_GRADING_SYMBOLS.filter(row => row[1] === 1).forEach(row => masterySymbols.push(row[0]));
+  if (failSymbols.length === 0) DEFAULT_GRADING_SYMBOLS.filter(row => row[1] === 0).forEach(row => failSymbols.push(row[0]));  // Determine attempt columns region by header scan  
   const headerRow = gradesSheet.getRange(1, 1, 1, gradesSheet.getLastColumn()).getValues()[0];
   const firstAttemptCol = headerRow.findIndex(h => /^([A-Za-z])1$/.test(String(h || ''))) + 1; // like B1, I1, M1
   if (firstAttemptCol <= 0) return;
@@ -269,8 +267,12 @@ function populateDemoGrades() {
     const gradesTestSheet = ss.getSheetByName('Grades');
     if (!gradesTestSheet) return;
 
+    // Extract mastery and fail symbols from DEFAULT_GRADING_SYMBOLS
+    const masterySymbols = DEFAULT_GRADING_SYMBOLS.filter(row => row[1] === 1).map(row => row[0]);
+    const failSymbols = DEFAULT_GRADING_SYMBOLS.filter(row => row[1] === 0).map(row => row[0]);
+
     const testCases = [
-      { description: 'Symbol Coverage', attempts: ['1', '1o', '1s', 'X', 'Xo', 'Xs', 'P', 'G', 'H', 'N'] },
+      { description: 'Symbol Coverage', attempts: [...masterySymbols.slice(0, 4), ...failSymbols.slice(0, 6)] },
       {
         description: 'Empty Set', attempts: [
           '', '', '', '', '',
@@ -278,55 +280,51 @@ function populateDemoGrades() {
           '', '', '', '', '',
         ]
       },
-      { description: 'Should get 0s', attempts: ['x', 'x', 'x', 'x', 'x'] },
-      { description: 'Should get 0s', attempts: ['x', 'P', 'G', 'H', 'N'] },
-      { description: 'Should get 0s', attempts: ['x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x'] },
-      { description: 'Should get 0s', attempts: ['x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x'] },
-      { description: 'Should get 1s', attempts: ['x', '1', 'x', '1o', 'x'] },
-      { description: 'Should get 1s', attempts: ['1s', 'x', '1', 'x', '1o', 'x', 'x', '1', 'x', '1o', 'x'] },
-      { description: 'Should get 2s', attempts: ['x', 'x', '1', '1', 'x'] },
+      { description: 'Should get 0s', attempts: Array(5).fill(failSymbols[0]) },
+      { description: 'Should get 0s', attempts: [failSymbols[0], failSymbols[6], failSymbols[7], failSymbols[8], failSymbols[9]] },
+      { description: 'Should get 0s', attempts: Array(10).fill(failSymbols[0]) },
+      { description: 'Should get 0s', attempts: Array(13).fill(failSymbols[0]) },
+      { description: 'Should get 1s', attempts: [failSymbols[0], masterySymbols[0], failSymbols[0], masterySymbols[1], failSymbols[0]] },
+      { description: 'Should get 1s', attempts: [masterySymbols[3], failSymbols[0], masterySymbols[0], failSymbols[0], masterySymbols[1], failSymbols[0], failSymbols[0], masterySymbols[0], failSymbols[0], masterySymbols[1], failSymbols[0]] },
+      { description: 'Should get 2s', attempts: [failSymbols[0], failSymbols[0], masterySymbols[0], masterySymbols[0], failSymbols[0]] },
       {
-        description: 'Should get 2s', attempts: ['1o', '1s', '1', '1', 'x',
-          'x', '1', 'x', '1', 'x',
+        description: 'Should get 2s', attempts: [masterySymbols[1], masterySymbols[3], masterySymbols[0], masterySymbols[0], failSymbols[0],
+        failSymbols[0], masterySymbols[0], failSymbols[0], masterySymbols[0], failSymbols[0],
         ]
       },
       {
-        description: 'Should get 2s', attempts: ['x', 'x', 'x', '1', '1o',
-          'x', '1', 'x', '1', 'x',
-          'N', '1', 'N', '1', 'N',
+        description: 'Should get 2s', attempts: [failSymbols[0], failSymbols[0], failSymbols[0], masterySymbols[0], masterySymbols[1],
+        failSymbols[0], masterySymbols[0], failSymbols[0], masterySymbols[0], failSymbols[0],
+        failSymbols[9], masterySymbols[0], failSymbols[9], masterySymbols[0], failSymbols[9],
         ]
       },
       {
         description: 'Should get 3s', attempts: [
-          '1', '1', 'x', '1', 'x',
-          '1', '1', 'x', '1', 'x',
+          masterySymbols[0], masterySymbols[0], failSymbols[0], masterySymbols[0], failSymbols[0],
+          masterySymbols[0], masterySymbols[0], failSymbols[0], masterySymbols[0], failSymbols[0],
         ]
       }, {
         description: 'Should get 3s', attempts: [
-          'x', '1', 'x', '1', 'x',
-          'x', '1', 'x', '1', '1s',
-          'N', '1', 'N', '1', 'N',
+          failSymbols[0], masterySymbols[0], failSymbols[0], masterySymbols[0], failSymbols[0],
+          failSymbols[0], masterySymbols[0], failSymbols[0], masterySymbols[0], masterySymbols[3],
+          failSymbols[9], masterySymbols[0], failSymbols[9], masterySymbols[0], failSymbols[9],
         ]
       },
       {
-        description: 'Should get 4s', attempts: [
-          '1', '1', '1', '1', '1',
-          '1', '1', '1', '1', '1',
-          '1', '1', '1', '1', '1'
-        ]
+        description: 'Should get 4s', attempts: Array(15).fill(masterySymbols[0])
       },
       {
         description: 'Should get 4s', attempts: [
           '', '', '', '', '',
-          '1', 'x', 'G', '1s', 'x',
-          'H', 'G', 'P', '1o', '1s'
+          masterySymbols[0], failSymbols[0], failSymbols[7], masterySymbols[3], failSymbols[0],
+          failSymbols[8], failSymbols[7], failSymbols[6], masterySymbols[1], masterySymbols[3]
         ]
       },
       {
         description: 'Should get 4s', attempts: [
-          'N', 'N', 'N', 'H', 'G',
-          'N', 'x', 'G', '1s', '1',
-          'H', 'G', 'P', '1o', '1s'
+          failSymbols[9], failSymbols[9], failSymbols[9], failSymbols[8], failSymbols[7],
+          failSymbols[9], failSymbols[0], failSymbols[7], masterySymbols[3], masterySymbols[0],
+          failSymbols[8], failSymbols[7], failSymbols[6], masterySymbols[1], masterySymbols[3]
         ]
       },
     ];
