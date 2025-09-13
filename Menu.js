@@ -1,4 +1,4 @@
-/* Menu.js Last Update 2025-08-27 06:51:57 <e53d6c27911ed4f8ea11556082638159856694c7856f19e59c260c7b5a4abe41>
+/* Menu.js Last Update 2025-09-12 16:39 <1dbbdfc13934b475e867a037f8fe8d4f12b082f74cd7396e29b2fb306222447e>
 /* eslint-disable no-unused-vars */
 /* exported onOpen, doInitialSetup, setupGradeSheet, addStudentsAndSkills, reformatGradesOnly */
 /* global SpreadsheetApp, setupNamedRanges, setupStudents, setupSkills, setupGradesSheet, populateGrades, reformatGradesOnly,
@@ -18,7 +18,13 @@ const MENU = {
   SETUP_GRADE_VIEW: 'Setup Grade View (Read Only)',
   GENERATE_STUDENT_VIEWS: 'Generate student views',
   SHARE_STUDENT_VIEWS: 'Share student views',
-  GENERATE_UNIT_OVERVIEW: 'Create Unit Overview (Averages)'
+  GENERATE_UNIT_OVERVIEW: 'Create Unit Overview (Averages)',
+  // Aspen Integration
+  ASPEN_SETUP: 'Setup Aspen Integration...',
+  ASPEN_TEST: 'Test Aspen Connection',
+  ASPEN_STATUS: 'Show Aspen Status',
+  ASPEN_CREATE_ASSIGNMENT: 'Create Assignment...',
+  ASPEN_SYNC_GRADES: 'Sync Grades...',
 }
 
 function onOpen() {
@@ -35,7 +41,18 @@ function onOpen() {
     .addItem(MENU.SETUP_GRADE_VIEW, 'setupGradeViewSheet')
     .addItem(MENU.GENERATE_UNIT_OVERVIEW, 'createUnitOverview')
     .addItem(MENU.GENERATE_STUDENT_VIEWS, 'generateStudentViews')
-    .addItem(MENU.SHARE_STUDENT_VIEWS, 'shareStudentViews');
+    .addItem(MENU.SHARE_STUDENT_VIEWS, 'shareStudentViews')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('Aspen Integration')
+      .addItem(MENU.ASPEN_SETUP, 'setupAspenIntegration')
+      .addSeparator()
+      .addItem(MENU.ASPEN_TEST, 'testAspenConnection')
+      .addItem(MENU.ASPEN_STATUS, 'showAspenStatus')
+      .addSeparator()
+      .addItem(MENU.ASPEN_CREATE_ASSIGNMENT, 'createAspenAssignmentUI')
+      .addItem(MENU.ASPEN_SYNC_GRADES, 'syncGradesUI'))
+    ;
+
 
 
   // Advanced submenu
