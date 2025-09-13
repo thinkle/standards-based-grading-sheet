@@ -1,8 +1,9 @@
-/* AspenGradeSync.js Last Update 2025-09-13 10:30:25 <188771d7c5443cdf0c08b736b76ffbb5de11a2e0193f29532c046dcfa57d1d6a> */
+/* AspenGradeSync.js Last Update 2025-09-13 11:43 <12d38998e82624cc75c21940469a3cd5acd8c4a53e813d6db20c81038845b0a2>
 
-/* AspenGradeSync.js Last Update 2025-09-13 10:17 <e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855>
- * Implements: Add all skill items to Aspen Assignments Tab (WIP)
+/* AspenGradeSync.js Last Update 2025-09-13 12:05 <sync-grades-impl>
+ * Implements: Add all skill items to Aspen Assignments Tab, Unit Average helper, and Grade Sync (skill & unit-average modes)
  */
+/* global SpreadsheetApp, createGradeSyncManager, getAspenAssignments */
 
 /**
  * Adds all skill/unit items from the Grades sheet to the Aspen Assignments tab.
@@ -159,4 +160,160 @@ function addUnitAveragesToAspenAssignments() {
     'Aspen Assignments',
     5
   );
+}
+
+// ---------------- Grade Sync helpers ----------------
+
+/**
+ * Read the Grades sheet once and build fast lookups.
+ * Returns { rows, byEmailUnitSkill, byEmailUnit, header, indices, symbolCols }.
+ */
+function readGradesSnapshot_() {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName('Grades');
+  if (!sh) throw new Error('Grades sheet not found.');
+
+  const data = sh.getDataRange().getValues();
+  if (data.length < 2) {
+    return { rows: [], byEmailUnitSkill: new Map(), byEmailUnit: new Map(), header: [], indices: {}, symbolCols: [] };
+  }
+  const header = data[0];
+  const idx = {
+    name: header.indexOf('Name'),
+    email: header.indexOf('Email'),
+    unit: header.indexOf('Unit'),
+    skillNum: header.indexOf('Skill #'),
+    desc: header.indexOf('Skill Description'),
+    mastery: header.indexOf('Mastery Grade')
+  };
+  ['email','unit','skillNum','mastery'].forEach(k => { if (idx[k] === -1) throw new Error(`Grades header missing: ${k}`); });
+
+  // Detect per-level Symbols columns by pattern: [.. Streak], [.. String], [LevelName]
+  const symbolCols = [];
+  let col = idx.mastery + 1; // start after Mastery Grade
+  while (col + 2 < header.length) {
+    const h0 = String(header[col] || '');
+    const h1 = String(header[col + 1] || '');
+    const h2 = String(header[col + 2] || '');
+    if (h0.endsWith(' Streak') && h1.endsWith(' String') && h2 && !/^\s*$/.test(h2)) {
+      symbolCols.push(col + 2);
+      col += 3;
+    } else {
+      break;
+    }
+  }
+
+  const rows = [];
+  const byEmailUnitSkill = new Map(); // key email|unit|skill#
+  const byEmailUnit = new Map();      // key email|unit -> array of row objects
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    const email = String(r[idx.email] || '').trim();
+    const unit = String(r[idx.unit] || '').trim();
+    const skillNum = r[idx.skillNum] != null && r[idx.skillNum] !== '' ? String(r[idx.skillNum]) : '';
+    const desc = idx.desc !== -1 ? String(r[idx.desc] || '').trim() : '';
+    const sVal = r[idx.mastery];
+    const score = (typeof sVal === 'number') ? sVal : (sVal != null && sVal !== '' && !isNaN(Number(sVal)) ? Number(sVal) : null);
+    // Build per-level symbols comment block
+    const levelParts = [];
+    symbolCols.forEach(ci => {
+      const label = String(header[ci] || '').trim(); // Level name
+      const val = String(r[ci] || '').trim();
+      if (label && val) levelParts.push(`${label}: ${val}`);
+    });
+    const levelComment = levelParts.join(' | ');
+
+    if (!email) continue; // require student
+    const row = { email, unit, skillNum, desc, score, levelComment };
+    rows.push(row);
+    if (unit && skillNum) {
+      byEmailUnitSkill.set(`${email}|${unit}|${skillNum}`, row);
+    }
+    if (unit) {
+      const keyEU = `${email}|${unit}`;
+      if (!byEmailUnit.has(keyEU)) byEmailUnit.set(keyEU, []);
+      byEmailUnit.get(keyEU).push(row);
+    }
+  }
+
+  return { rows, byEmailUnitSkill, byEmailUnit, header, indices: idx, symbolCols };
+}
+
+/**
+ * Sync grades in Skill mode: one assignment per (Unit, Skill#) per student.
+ * Reads Grades once and posts only changed grades.
+ */
+function syncGradesSkillMode(classId) {
+  const mgr = createGradeSyncManager(classId);
+  const snapshot = readGradesSnapshot_();
+  const assignments = getAspenAssignments();
+
+  // Build lookup for assignments by (unit, skill#)
+  const byUnitSkill = new Map();
+  assignments.forEach(a => {
+    const unit = String(a.unit || '').trim();
+    const skill = String(a.skill || '').trim();
+    const id = String(a.assignmentId || '').trim();
+    if (unit && skill && id && skill !== 'Unit Average') byUnitSkill.set(`${unit}|${skill}`, id);
+  });
+
+  let attempted = 0, synced = 0, skipped = 0, errors = 0;
+  snapshot.rows.forEach(row => {
+    if (!row.unit || !row.skillNum) return;
+    const assignmentId = byUnitSkill.get(`${row.unit}|${row.skillNum}`);
+    if (!assignmentId) return;
+    if (row.score == null) return; // nothing to sync
+    const comment = row.levelComment || '';
+    attempted++;
+    const res = mgr.maybeSync(row.email, assignmentId, row.score, comment);
+    if (res && res.success) {
+      if (res.synced) synced++; else skipped++;
+    } else {
+      errors++;
+    }
+  });
+
+  return { mode: 'skill', attempted, synced, skipped, errors };
+}
+
+/**
+ * Sync grades in Unit Average mode: one assignment "Unit Average" per Unit per student.
+ * Calculates per-student unit averages and posts only changed grades.
+ */
+function syncGradesUnitAverageMode(classId) {
+  const mgr = createGradeSyncManager(classId);
+  const snapshot = readGradesSnapshot_();
+  const assignments = getAspenAssignments();
+
+  // Map Unit -> assignmentId for Unit Average entries
+  const unitAvgMap = new Map();
+  assignments.forEach(a => {
+    const unit = String(a.unit || '').trim();
+    const skill = String(a.skill || '').trim();
+    const id = String(a.assignmentId || '').trim();
+    if (unit && id && skill === 'Unit Average') unitAvgMap.set(unit, id);
+  });
+
+  let attempted = 0, synced = 0, skipped = 0, errors = 0;
+
+  // For each (email, unit) compute average and comment
+  snapshot.byEmailUnit.forEach((rows, key) => {
+    const [email, unit] = key.split('|');
+    const assignmentId = unitAvgMap.get(unit);
+    if (!assignmentId) return; // no Unit Average assignment yet
+    // Collect numeric scores and build breakdown
+    const scored = rows.filter(r => r.score != null);
+    if (scored.length === 0) return;
+    const avg = scored.reduce((s, r) => s + Number(r.score), 0) / scored.length;
+    const breakdown = scored.map(r => `${r.skillNum || '?'}: ${r.desc || ''} - ${r.score}`).join('\n');
+    attempted++;
+    const res = mgr.maybeSync(email, assignmentId, avg, breakdown);
+    if (res && res.success) {
+      if (res.synced) synced++; else skipped++;
+    } else {
+      errors++;
+    }
+  });
+
+  return { mode: 'unit-average', attempted, synced, skipped, errors };
 }

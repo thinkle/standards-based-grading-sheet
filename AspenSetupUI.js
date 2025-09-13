@@ -1,4 +1,4 @@
-/* AspenSetupUI.js Last Update 2025-09-12 16:39 <9b19f8798ea58a272a7b19ad4a41f34a47e65e900d3320f8f5b68db2586cc917>
+/* AspenSetupUI.js Last Update 2025-09-13 11:43 <b20137fe82cce928d2f228e56b5599a63872948a5ac1588e50c2ff28cb9e332d>
 // filepath: /Users/thinkle/BackedUpProjects/gas/standards-based-grading-sheet/AspenSetupUI.js
 
 /* Simple UI functions for Aspen integration setup */
@@ -236,5 +236,48 @@ function createAspenAssignmentUI() {
 }
 
 function syncGradesUI() {
-  SpreadsheetApp.getUi().alert('Coming Soon', 'Grade sync UI will be implemented next!', SpreadsheetApp.getUi().ButtonSet.OK);
+  try {
+    const ui = SpreadsheetApp.getUi();
+    const ss = SpreadsheetApp.getActive();
+    const cfg = ss.getSheetByName('Aspen Config');
+    if (!cfg || cfg.getLastRow() < 2) {
+      ui.alert('Aspen', 'No configured class found. Run "Setup Aspen Integration" first.', ui.ButtonSet.OK);
+      return;
+    }
+    const vals = cfg.getRange(2, 1, cfg.getLastRow() - 1, Math.max(2, cfg.getLastColumn())).getValues();
+    const classes = vals.map(r => ({ id: String(r[0] || '').trim(), name: String(r[1] || '').trim() })).filter(c => c.id);
+    if (classes.length === 0) {
+      ui.alert('Aspen', 'No configured class found. Run "Setup Aspen Integration" first.', ui.ButtonSet.OK);
+      return;
+    }
+    let classId = classes[0].id;
+    if (classes.length > 1) {
+      const list = classes.map((c, i) => `${i + 1}. ${c.name || c.id}  [${c.id}]`).join('\n');
+      const res = ui.prompt('Select Class', `Multiple classes configured. Enter the number to target:\n\n${list}`, ui.ButtonSet.OK_CANCEL);
+      if (res.getSelectedButton() !== ui.Button.OK) return;
+      const n = parseInt(res.getResponseText().trim(), 10);
+      if (!isNaN(n) && n >= 1 && n <= classes.length) classId = classes[n - 1].id;
+    }
+
+    // Choose mode
+    const modeRes = ui.prompt('Sync Grades', 'Enter mode: 1 for Skill, 2 for Unit Average', ui.ButtonSet.OK_CANCEL);
+    if (modeRes.getSelectedButton() !== ui.Button.OK) return;
+    const modeInput = modeRes.getResponseText().trim();
+    const mode = (modeInput === '2') ? 'unit-average' : 'skill';
+
+    // Execute sync
+    let result;
+    if (mode === 'unit-average') {
+      result = syncGradesUnitAverageMode(classId);
+    } else {
+      result = syncGradesSkillMode(classId);
+    }
+
+    ui.alert('Aspen Grade Sync',
+      `Mode: ${result.mode}\nAttempted: ${result.attempted}\nSynced: ${result.synced}\nNo Change: ${result.skipped}\nErrors: ${result.errors}`,
+      ui.ButtonSet.OK);
+  } catch (e) {
+    if (typeof console !== 'undefined' && console.error) console.error('syncGradesUI error', e);
+    SpreadsheetApp.getUi().alert('Error', `Failed to sync grades:\n\n${e}`, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
 }
