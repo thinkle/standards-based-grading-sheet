@@ -1,4 +1,4 @@
-/* AspenIdGen.js Last Update 2025-09-13 11:31 <02907ef37736f4987ff6b53337da3e343294487015ad18f112f6f8fee9b1b694>
+/* AspenIdGen.js Last Update 2025-09-13 12:48 <7449fee8ce20458f6f24aca0091d0ab2c27b11d3091734d6a84090df02690b27>
 // filepath: /Users/thinkle/BackedUpProjects/gas/standards-based-grading-sheet/AspenIdGen.js
 
 /* A module for generating IDs for Aspen Assignments from our skill #/name combos */
@@ -214,43 +214,57 @@ function createAssignmentTitle(unit, skillNum, descriptor) {
     descriptor = '';
   }
 
-  const cleanUnit = String(unit || '').replace(/unit/i, '').trim();
-  const skillStr = String(skillNum || '').trim();
-  const sep = ' - ';
+  const unitDisplay = String(unit || '').replace(/\bunit\\s*/i, '').trim() || unit;
+  const rawSkill = String(skillNum || '').trim();
+  const isUnitAverage = /^unit\s*average$/i.test(rawSkill);
+  // For "Unit Average", use a compact skill label and set a readable descriptor
+  const skillStr = isUnitAverage ? 'AVG' : rawSkill;
+  const finalDescriptor = descriptor || (isUnitAverage ? 'Unit Average' : '');
+  const sep = '-'; // keep a single character!
 
-  // Ensure first 10 chars are dominated by Unit+Skill portion
-  let base = `${cleanUnit}${sep}${skillStr}`;
-  if (base.length > 10) {
-    const maxUnit = Math.max(1, 10 - skillStr.length - sep.length);
-    const shortUnit = cleanUnit.substring(0, Math.max(0, maxUnit));
-    base = `${shortUnit}${sep}${skillStr}`;
+  // Case 1: If raw {unit}{sep}{skill} < 10 → include descriptor
+  const rawBase = `${unitDisplay}${sep}${skillStr}`;
+  if (rawBase.length < 10) {
+    const suffix = finalDescriptor ? `: ${finalDescriptor}` : '';
+    return `${rawBase}${suffix}`.trim();
   }
 
-  // Include full descriptor after a colon if provided
-  const suffix = descriptor ? `: ${descriptor}` : '';
-  return `${base}${suffix}`.trim();
+  // Case 2: Else if {skill} <= 7 → shorten unit to fit exactly within 10 for the prefix, omit descriptor
+  if (skillStr.length <= 7) {
+    const shortLen = Math.max(1, 10 - sep.length - skillStr.length);
+    const shortUnit = unitDisplay.substring(0, shortLen);
+    return `${shortUnit}${sep}${skillStr}`.trim();
+  }
+
+  // Case 3: Else → hash-prefixed title with descriptor to avoid Aspen 10-char collisions
+  const hash = simpleHash(`${unitDisplay}${skillStr}`).substring(0, 8);
+  const suffix = finalDescriptor ? `: ${finalDescriptor}` : '';
+  return `[${hash}] ${unitDisplay}${sep}${skillStr}${suffix}`.trim();
 }
 
 function testAssignmentTitles() {
-  for (let [unit, skill] of [
-    ['A', '1.11'],
+  for (let [unit, skill, descriptor] of [
+    ['A', '1.11', 'A test descriptor'],
 
-    ['Algebra', '1:11'],
-    ['Geometry', 'Circle Properties'],
-    ['Geometry', 'Circle Properties and Attributes'],
-    ['Geometry', 'Circle Properties and Attributes and Things'],
-    ['Unit A', '1-11'],
-    ['Unit A', '1/11'],
-    ['Unit 1', 'A.11'],
-    ['Geometry', '2.a.c'],
-    ['Geometry', '2.a.d'],
-    ['Geometry', '3.1.a'],
-    ['Geometry', '2.a.c Circle Properties'],
-    ['Geometry', '2.a.d Circle Properties and Attributes'],
-    ['Geometry', '3.1.a Circle Properties and Attributes and Things'],
+    ['Algebra', '1:11', 'Algebra test descriptor'],
+    ['Geometry', 'Circle Properties', 'Geometry test descriptor'],
+    ['Geometry', 'Circle Properties and Attributes', 'Geometry test descriptor'],
+    ['Geometry', 'Circle Properties and Attributes and Things', 'Geometry test descriptor'],
+    ['Unit A', '1-11', 'Unit A test descriptor'],
+    ['Unit A', '1/11', 'Unit A test descriptor'],
+    ['Unit 1', 'A.11', 'Unit 1 test descriptor'],
+    ['Geometry', '2.a.c', 'Geometry test descriptor'],
+    ['Geometry', '2.a.d', 'Geometry test descriptor'],
+    ['Geometry', '3.1.a', 'Geometry test descriptor'],
+    ['Geometry', 'Unit Average', 'Geometry test descriptor'],
+    ['Unit: Fractions', 'Add & Subtract', 'Unit: Fractions test descriptor'],
+    ['Unit 3', 'Unit Average', 'Unit 3 test descriptor'],
+    ['Geometry', '2.a.c Circle Properties', 'Geometry test descriptor'],
+    ['Geometry', '2.a.d Circle Properties and Attributes', 'Geometry test descriptor'],
+    ['Geometry', '3.1.a Circle Properties and Attributes and Things', 'Geometry test descriptor'],
 
   ]) {
-    const title = createAssignmentTitle(unit, skill);
+    const title = createAssignmentTitle(unit, skill, descriptor);
     console.log(`"${unit}" + "${skill}" → ${title}`);
   }
 }
