@@ -14,7 +14,7 @@ update_header() {
     sed -i '' "1s|.*|/* $filename Last Update $date <$hash>|" "$file"
   else
     # Insert the header at the top
-    { echo "/* $filename Last Update $date <$hash>"; cat "$file"; } > temp && mv temp "$file"
+    { echo "/* $filename Last Update $date <$hash> */"; cat "$file"; } > temp && mv temp "$file"
   fi
 }
 
