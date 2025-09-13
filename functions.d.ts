@@ -26,6 +26,12 @@ declare function postGrade(
 // AspenAssignments.js functions
 declare function getAspenAssignments(): any[];
 declare function createAspenAssignmentManager(classId: string): any;
+declare function createMissingAssignmentsFromSheet(classId: string): {
+  created: number;
+  skipped: number;
+  errors: Array<{ row: number; error: string }>;
+  updatedRows: number[];
+};
 
 // GradeSync.js student helpers
 declare function getAspenStudents(classId: string): any[];

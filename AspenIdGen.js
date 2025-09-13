@@ -1,4 +1,4 @@
-/* AspenIdGen.js Last Update 2025-09-12 18:19 <7275a2cb52b34b3f8642c34a2881662ffcdb58aed12b13998fd1566b4811eece>
+/* AspenIdGen.js Last Update 2025-09-13 11:31 <02907ef37736f4987ff6b53337da3e343294487015ad18f112f6f8fee9b1b694>
 // filepath: /Users/thinkle/BackedUpProjects/gas/standards-based-grading-sheet/AspenIdGen.js
 
 /* A module for generating IDs for Aspen Assignments from our skill #/name combos */
@@ -208,25 +208,27 @@ function testAspenIdGeneration() {
   return results;
 }
 
-function createAssignmentTitle(unit, skill) {
-  // Aspen auto-generates an ID from the first 10 characters of the title which we *cannot change*
-  // Therefore, we need our skill and unit names to be reasonably short (at least at the start of the title).
-  if (unit.length + skill.length + 3 < 10) {
-    return `${unit} - ${skill}`;
-  } else {
-    // get short unit and skill
-    unit = unit.replace(/unit/i, '').trim();
-    skill = skill.replace(/standard|skill/i, '').trim();
-    let shortUnit = unit;
-    if (skill.length < 7) {
-      shortUnit = unit.substring(0, 10 - skill.length - 1);
-      return `${shortUnit}-${skill} (${unit})`;
-    } else {
-      // in this case, we need a short hash for the skill and unit to ensure it is unique
-      const hash = simpleHash(`${unit}${skill}`).substring(0, 8);
-      return `[${hash}] ${unit} - ${skill}`;
-    }
+function createAssignmentTitle(unit, skillNum, descriptor) {
+  // Backward-compat: if called with (unit, skill) only
+  if (typeof descriptor === 'undefined') {
+    descriptor = '';
   }
+
+  const cleanUnit = String(unit || '').replace(/unit/i, '').trim();
+  const skillStr = String(skillNum || '').trim();
+  const sep = ' - ';
+
+  // Ensure first 10 chars are dominated by Unit+Skill portion
+  let base = `${cleanUnit}${sep}${skillStr}`;
+  if (base.length > 10) {
+    const maxUnit = Math.max(1, 10 - skillStr.length - sep.length);
+    const shortUnit = cleanUnit.substring(0, Math.max(0, maxUnit));
+    base = `${shortUnit}${sep}${skillStr}`;
+  }
+
+  // Include full descriptor after a colon if provided
+  const suffix = descriptor ? `: ${descriptor}` : '';
+  return `${base}${suffix}`.trim();
 }
 
 function testAssignmentTitles() {
