@@ -1,4 +1,4 @@
-/* AspenIdGen.js Last Update 2025-09-13 12:48 <7449fee8ce20458f6f24aca0091d0ab2c27b11d3091734d6a84090df02690b27>
+/* AspenIdGen.js Last Update 2025-09-13 12:51 <517c155fca594a2e28131adcb11852e219893c6b77b4973234c3fd44754cd1b8>
 // filepath: /Users/thinkle/BackedUpProjects/gas/standards-based-grading-sheet/AspenIdGen.js
 
 /* A module for generating IDs for Aspen Assignments from our skill #/name combos */
@@ -208,6 +208,26 @@ function testAspenIdGeneration() {
   return results;
 }
 
+/* 
+NOTE: createAssignmentTitle has to be careful because ASPEN silently turns our titles into 
+Gradebook "Codes" (what the teacher sees at the top of the gradebook) which MUST BE UNIQUE.
+They do NOT EXPOSE AN API for directly setting the Gradebook Code, so we have to be clever. 
+The code will just be the first 10 characters of the title, so we have to ensure uniqueness.
+The easiest way to do this is with a HASH, but that's ugly.
+
+So... if the teacher has given us a {unit}-{skill} combo that is short enough, we just use that.
+If it's close, we shorten the unit to fit exactly 10 chars and hope we don't have a collision
+(if the teacher chooses unfortunate unit names and repeats skill numbers, this will break, but we'll
+cross our fingers that doesn't happen).
+
+If the unit+skill combo is too long, we fall back to a hash-based title that includes the full unit
+and skill in the description part of the title. This is ugly but it should work at least.
+
+So this current code WILL BREAK if the teacher has two units that begin with similar characters, but 
+as long as the unit STARTS with something different, it should be OK, so it would be advisable to
+go with things like I. Units and Dimensions  2. Units and Conversions rather than just going with 
+`Units and Dimensions` and then `Units and Conversions`, both of which would shorten to e.g. `Un-1.1`
+*/
 function createAssignmentTitle(unit, skillNum, descriptor) {
   // Backward-compat: if called with (unit, skill) only
   if (typeof descriptor === 'undefined') {
