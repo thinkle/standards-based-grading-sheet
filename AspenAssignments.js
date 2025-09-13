@@ -1,4 +1,4 @@
-/* AspenAssignments.js Last Update 2025-09-13 09:00 <6a7116f8ebee6a3ac8109ae3264bc4a6a7b1742fffdac4e5de6ed526e0e0724f>
+/* AspenAssignments.js Last Update 2025-09-13 09:34 <61003ae3444b9277089caea78b8621eafac7486e8d86332cb3d9f2584ac75f16>
 // filepath: /Users/thinkle/BackedUpProjects/gas/standards-based-grading-sheet/AspenAssignments.js
 
 /* global SpreadsheetApp, createAssignmentId, createAssignmentTitle, getAspenClassConfig, createLineItem */
@@ -103,6 +103,8 @@ function getAspenAssignments() {
   const sheet = getAspenAssignmentsSheet();
   const data = sheet.getDataRange().getValues();
   const assignments = [];
+  const unitCol = getColumnIndex(ASPEN_ASSIGNMENTS_COLS, ASPEN_ASSIGNMENTS_HEADERS.unit);
+  const skillCol = getColumnIndex(ASPEN_ASSIGNMENTS_COLS, ASPEN_ASSIGNMENTS_HEADERS.skill);
   const assignmentIdCol = getColumnIndex(ASPEN_ASSIGNMENTS_COLS, ASPEN_ASSIGNMENTS_HEADERS.assignmentId);
   const titleCol = getColumnIndex(ASPEN_ASSIGNMENTS_COLS, ASPEN_ASSIGNMENTS_HEADERS.title);
   const categoryCol = getColumnIndex(ASPEN_ASSIGNMENTS_COLS, ASPEN_ASSIGNMENTS_HEADERS.category);
@@ -114,6 +116,8 @@ function getAspenAssignments() {
 
   for (let i = 1; i < data.length; i++) {
     assignments.push({
+      unit: data[i][unitCol],
+      skill: data[i][skillCol],
       assignmentId: data[i][assignmentIdCol],
       title: data[i][titleCol],
       category: data[i][categoryCol],

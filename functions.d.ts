@@ -23,6 +23,14 @@ declare function postGrade(
   comment?: string
 ): any;
 
+// AspenAssignments.js functions
+declare function getAspenAssignments(): any[];
+declare function createAspenAssignmentManager(classId: string): any;
+
+// GradeSync.js student helpers
+declare function getAspenStudents(classId: string): any[];
+declare function createGradeSyncManager(classId: string): any;
+
 // GradeSync.js functions
 declare function getColumnIndex(cols: string[], header: string): number;
 declare function initializeAspenIntegration(classId: string): void;

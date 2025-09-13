@@ -1,21 +1,30 @@
-/* AspenGrades.js Last Update 2025-09-13 08:36 <d0c7c6821168ce61173cbd56b1817e42baf5239eecd2b097351d0fbdc59fa19f>
+/* AspenGrades.js Last Update 2025-09-13 09:42 <9709bffa3140fee448114a96e5cea4faf743aee505e6d51e1e4e7321e4323091>
 // filepath: /Users/thinkle/BackedUpProjects/gas/standards-based-grading-sheet/AspenGrades.js
 
 /* Sheet and manager code for Aspen grades */
+/* global SpreadsheetApp, getAspenStudents, getAspenAssignments, postGrade */
 
 // Aspen Grades Sheet
 const ASPEN_GRADES_HEADERS = {
+  studentEmail: 'Student Email',
+  unit: 'Unit',
+  skill: 'Skill',
+  score: 'Score',
+  comment: 'Comment',
+  dateSynced: 'Date Synced',
   studentId: 'Student ID',
   assignmentId: 'Assignment ID',
-  score: 'Score',
-  dateSynced: 'Date Synced'
 };
 
 const ASPEN_GRADES_COLS = [
-  ASPEN_GRADES_HEADERS.studentId,
-  ASPEN_GRADES_HEADERS.assignmentId,
+  ASPEN_GRADES_HEADERS.studentEmail,
+  ASPEN_GRADES_HEADERS.unit,
+  ASPEN_GRADES_HEADERS.skill,
   ASPEN_GRADES_HEADERS.score,
-  ASPEN_GRADES_HEADERS.dateSynced
+  ASPEN_GRADES_HEADERS.comment,
+  ASPEN_GRADES_HEADERS.dateSynced,
+  ASPEN_GRADES_HEADERS.studentId,
+  ASPEN_GRADES_HEADERS.assignmentId
 ];
 
 /* Helper Functions */
@@ -27,6 +36,38 @@ const ASPEN_GRADES_COLS = [
  */
 function getColumnIndex(cols, header) {
   return cols.indexOf(header);
+}
+
+/**
+ * Ensures Unit/Skill lookup formulas exist for a given row.
+ * Looks up Unit/Skill from 'Aspen Assignments' based on this row's Assignment ID.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - Grades sheet
+ * @param {number} row - 1-based row index
+ */
+function ensureLookupFormulasForRow(sheet, row) {
+  const unitCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.unit) + 1; // 1-based
+  const skillCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.skill) + 1;
+  const studentEmailCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.studentEmail) + 1;
+  const assignmentIdCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.assignmentId) + 1;
+  const studentIdCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.studentId) + 1;
+
+  const assignmentCellA1 = sheet.getRange(row, assignmentIdCol).getA1Notation();
+  const studentIdCellA1 = sheet.getRange(row, studentIdCol).getA1Notation();
+
+  // Use FILTER to pull Unit/Skill by matching Aspen ID (column C) in 'Aspen Assignments'
+  const unitFormula = `=IF(${assignmentCellA1}="","",IFERROR(INDEX(FILTER('Aspen Assignments'!$A:$A, 'Aspen Assignments'!$C:$C = ${assignmentCellA1}),1),""))`;
+  const skillFormula = `=IF(${assignmentCellA1}="","",IFERROR(INDEX(FILTER('Aspen Assignments'!$B:$B, 'Aspen Assignments'!$C:$C = ${assignmentCellA1}),1),""))`;
+
+  // Use FILTER to pull Student Email by matching Student ID (column A) in 'Aspen Students'
+  const emailFormula = `=IF(${studentIdCellA1}="","",IFERROR(INDEX(FILTER('Aspen Students'!$C:$C, 'Aspen Students'!$A:$A = ${studentIdCellA1}),1),""))`;
+
+  const unitCell = sheet.getRange(row, unitCol);
+  const skillCell = sheet.getRange(row, skillCol);
+  const emailCell = sheet.getRange(row, studentEmailCol);
+
+  if (!unitCell.getFormula()) unitCell.setFormula(unitFormula);
+  if (!skillCell.getFormula()) skillCell.setFormula(skillFormula);
+  if (!emailCell.getFormula()) emailCell.setFormula(emailFormula);
 }
 
 /* Aspen Grade Sheet Functions */
@@ -50,12 +91,13 @@ function getAspenGradesSheet() {
 }
 
 /**
- * Records a synced grade
+ * Records a synced grade (derived columns are looked up by formulas)
  * @param {string} studentId - Aspen student ID
  * @param {string} assignmentId - Aspen assignment ID
  * @param {number} score - Grade score
+ * @param {string} [comment] - Optional grade comment
  */
-function recordSyncedGrade(studentId, assignmentId, score) {
+function recordSyncedGrade(studentId, assignmentId, score, comment = '') {
   const sheet = getAspenGradesSheet();
   const dateSynced = new Date();
 
@@ -63,17 +105,38 @@ function recordSyncedGrade(studentId, assignmentId, score) {
   const data = sheet.getDataRange().getValues();
   const studentIdCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.studentId);
   const assignmentIdCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.assignmentId);
+  const scoreCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.score);
+  const commentCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.comment);
+  const dateSyncedCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.dateSynced);
+  const studentEmailCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.studentEmail);
 
   for (let i = 1; i < data.length; i++) {
     if (data[i][studentIdCol] === studentId && data[i][assignmentIdCol] === assignmentId) {
-      // Update existing grade
-      sheet.getRange(i + 1, 1, 1, ASPEN_GRADES_COLS.length).setValues([[studentId, assignmentId, score, dateSynced]]);
+      // Update existing grade: update score, comment, and date; keep formulas intact
+      sheet.getRange(i + 1, scoreCol + 1).setValue(score);
+      sheet.getRange(i + 1, commentCol + 1).setValue(comment);
+      sheet.getRange(i + 1, dateSyncedCol + 1).setValue(dateSynced);
+      // Ensure lookup formulas are present for this row (in case of older rows)
+      ensureLookupFormulasForRow(sheet, i + 1);
       return;
     }
   }
 
   // Add new grade record
-  sheet.appendRow([studentId, assignmentId, score, dateSynced]);
+  sheet.appendRow([
+    '',                  // Student Email (lookup via formula)
+    '',                  // Unit (formula added below)
+    '',                  // Skill (formula added below)
+    score,               // Score
+    comment,             // Comment
+    dateSynced,          // Date Synced
+    studentId,           // Student ID
+    assignmentId         // Assignment ID
+  ]);
+
+  // Add lookup formulas for the new row
+  const newRow = sheet.getLastRow();
+  ensureLookupFormulasForRow(sheet, newRow);
 }
 
 /**
@@ -88,6 +151,7 @@ function getSyncedGrade(studentId, assignmentId) {
   const studentIdCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.studentId);
   const assignmentIdCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.assignmentId);
   const scoreCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.score);
+  const commentCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.comment);
   const dateSyncedCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.dateSynced);
 
   for (let i = 1; i < data.length; i++) {
@@ -96,6 +160,7 @@ function getSyncedGrade(studentId, assignmentId) {
         studentId: data[i][studentIdCol],
         assignmentId: data[i][assignmentIdCol],
         score: data[i][scoreCol],
+        comment: data[i][commentCol],
         dateSynced: data[i][dateSyncedCol]
       };
     }
@@ -150,6 +215,7 @@ class GradeSyncManager {
     const studentIdCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.studentId);
     const assignmentIdCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.assignmentId);
     const scoreCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.score);
+    const commentCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.comment);
     const dateSyncedCol = getColumnIndex(ASPEN_GRADES_COLS, ASPEN_GRADES_HEADERS.dateSynced);
 
     for (let i = 1; i < data.length; i++) {
@@ -157,6 +223,7 @@ class GradeSyncManager {
         studentId: data[i][studentIdCol],
         assignmentId: data[i][assignmentIdCol],
         score: data[i][scoreCol],
+        comment: data[i][commentCol],
         dateSynced: data[i][dateSyncedCol]
       };
       this.syncedGrades.push(grade);
@@ -169,12 +236,14 @@ class GradeSyncManager {
 
   /**
    * Checks if a grade needs syncing (fast lookup operation)
+   * @private
    * @param {string} studentEmail - Student email
    * @param {string} assignmentId - Assignment ID
    * @param {number} score - Current score
+   * @param {string} [comment] - Optional comment
    * @returns {boolean} True if sync is needed
    */
-  needsSync(studentEmail, assignmentId, score) {
+  _needsSync(studentEmail, assignmentId, score, comment) {
     if (!this.studentsLookup || !this.assignmentsLookup) {
       throw new Error('Data not loaded. Call loadData() first.');
     }
@@ -196,7 +265,9 @@ class GradeSyncManager {
       return true; // Never synced before
     }
 
-    return syncedGrade.score !== score; // Score has changed
+    const normalizedNewComment = (comment == null) ? '' : String(comment);
+    const normalizedOldComment = (syncedGrade.comment == null) ? '' : String(syncedGrade.comment);
+    return syncedGrade.score !== score || normalizedOldComment !== normalizedNewComment; // Score or comment has changed
   }
 
   /**
@@ -204,10 +275,11 @@ class GradeSyncManager {
    * @param {string} studentEmail - Student email
    * @param {string} assignmentId - Assignment ID  
    * @param {number} score - Current score
+   * @param {string} [comment] - Optional comment
    * @returns {Object} Sync result
    */
-  maybeSync(studentEmail, assignmentId, score) {
-    if (!this.needsSync(studentEmail, assignmentId, score)) {
+  maybeSync(studentEmail, assignmentId, score, comment) {
+    if (!this._needsSync(studentEmail, assignmentId, score, comment)) {
       return {
         success: true,
         synced: false,
@@ -215,17 +287,19 @@ class GradeSyncManager {
       };
     }
 
-    return this.syncGrade(studentEmail, assignmentId, score);
+    return this._syncGrade(studentEmail, assignmentId, score, comment);
   }
 
   /**
+   * @private
    * Syncs a grade to Aspen (assumes data is already loaded)
    * @param {string} studentEmail - Student email
    * @param {string} assignmentId - Assignment ID
-   * @param {number} score - Current score
+  * @param {number} score - Current score
+  * @param {string} [comment] - Optional comment
    * @returns {Object} Sync result
    */
-  syncGrade(studentEmail, assignmentId, score) {
+  _syncGrade(studentEmail, assignmentId, score, comment) {
     try {
       const student = this.studentsLookup[studentEmail];
       if (!student) {
@@ -241,7 +315,7 @@ class GradeSyncManager {
       const resultId = `${assignmentId}_${student.studentId}_${Date.now()}`;
 
       // Post grade to Aspen
-      const result = postGrade(resultId, assignment.assignmentData, student.studentData, score, '');
+      const result = postGrade(resultId, assignment.assignmentData, student.studentData, score, comment || '');
 
       // Update our in-memory lookup immediately
       const key = `${student.studentId}_${assignmentId}`;
@@ -249,12 +323,13 @@ class GradeSyncManager {
         studentId: student.studentId,
         assignmentId: assignmentId,
         score: score,
+        comment: comment || '',
         dateSynced: new Date()
       };
       this.syncedGradesLookup[key] = syncedGrade;
 
       // Record the synced grade to sheet (write immediately for safety)
-      recordSyncedGrade(student.studentId, assignmentId, score);
+      recordSyncedGrade(student.studentId, assignmentId, score, comment || '');
 
       return {
         success: true,
