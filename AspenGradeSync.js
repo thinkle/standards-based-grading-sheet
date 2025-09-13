@@ -1,9 +1,9 @@
-/* AspenGradeSync.js Last Update 2025-09-13 11:43 <12d38998e82624cc75c21940469a3cd5acd8c4a53e813d6db20c81038845b0a2>
+/* AspenGradeSync.js Last Update 2025-09-13 12:08 <d5b93a8bc45af771cd7a40cbf823eeba8f4ec63ada2e9e4104c6b95766af01e2>
 
 /* AspenGradeSync.js Last Update 2025-09-13 12:05 <sync-grades-impl>
  * Implements: Add all skill items to Aspen Assignments Tab, Unit Average helper, and Grade Sync (skill & unit-average modes)
  */
-/* global SpreadsheetApp, createGradeSyncManager, getAspenAssignments */
+/* global SpreadsheetApp, createGradeSyncManager */
 
 /**
  * Adds all skill/unit items from the Grades sheet to the Aspen Assignments tab.
@@ -186,7 +186,7 @@ function readGradesSnapshot_() {
     desc: header.indexOf('Skill Description'),
     mastery: header.indexOf('Mastery Grade')
   };
-  ['email','unit','skillNum','mastery'].forEach(k => { if (idx[k] === -1) throw new Error(`Grades header missing: ${k}`); });
+  ['email', 'unit', 'skillNum', 'mastery'].forEach(k => { if (idx[k] === -1) throw new Error(`Grades header missing: ${k}`); });
 
   // Detect per-level Symbols columns by pattern: [.. Streak], [.. String], [LevelName]
   const symbolCols = [];
@@ -236,6 +236,7 @@ function readGradesSnapshot_() {
     }
   }
 
+  console.log(`Grades snapshot: ${rows.length} rows, ${byEmailUnitSkill.size} email-unit-skill, ${byEmailUnit.size} email-unit groups`);
   return { rows, byEmailUnitSkill, byEmailUnit, header, indices: idx, symbolCols };
 }
 
@@ -246,8 +247,7 @@ function readGradesSnapshot_() {
 function syncGradesSkillMode(classId) {
   const mgr = createGradeSyncManager(classId);
   const snapshot = readGradesSnapshot_();
-  const assignments = getAspenAssignments();
-
+  const assignments = mgr.assignments || [];
   // Build lookup for assignments by (unit, skill#)
   const byUnitSkill = new Map();
   assignments.forEach(a => {
@@ -283,8 +283,7 @@ function syncGradesSkillMode(classId) {
 function syncGradesUnitAverageMode(classId) {
   const mgr = createGradeSyncManager(classId);
   const snapshot = readGradesSnapshot_();
-  const assignments = getAspenAssignments();
-
+  const assignments = mgr.assignments || [];
   // Map Unit -> assignmentId for Unit Average entries
   const unitAvgMap = new Map();
   assignments.forEach(a => {

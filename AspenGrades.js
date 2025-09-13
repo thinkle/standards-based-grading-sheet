@@ -1,4 +1,4 @@
-/* AspenGrades.js Last Update 2025-09-13 09:42 <9709bffa3140fee448114a96e5cea4faf743aee505e6d51e1e4e7321e4323091>
+/* AspenGrades.js Last Update 2025-09-13 12:08 <6dc47d71f94e8bfeac41c4812bfa1a10d38d244bbeeba2d90ad4f3227e510151>
 // filepath: /Users/thinkle/BackedUpProjects/gas/standards-based-grading-sheet/AspenGrades.js
 
 /* Sheet and manager code for Aspen grades */
@@ -113,9 +113,11 @@ function recordSyncedGrade(studentId, assignmentId, score, comment = '') {
   for (let i = 1; i < data.length; i++) {
     if (data[i][studentIdCol] === studentId && data[i][assignmentIdCol] === assignmentId) {
       // Update existing grade: update score, comment, and date; keep formulas intact
+      console.time && console.time('gradeSheetUpdate');
       sheet.getRange(i + 1, scoreCol + 1).setValue(score);
       sheet.getRange(i + 1, commentCol + 1).setValue(comment);
       sheet.getRange(i + 1, dateSyncedCol + 1).setValue(dateSynced);
+      console.timeEnd && console.timeEnd('gradeSheetUpdate');
       // Ensure lookup formulas are present for this row (in case of older rows)
       ensureLookupFormulasForRow(sheet, i + 1);
       return;
@@ -123,6 +125,7 @@ function recordSyncedGrade(studentId, assignmentId, score, comment = '') {
   }
 
   // Add new grade record
+  console.time && console.time('gradeSheetAppend');
   sheet.appendRow([
     '',                  // Student Email (lookup via formula)
     '',                  // Unit (formula added below)
@@ -133,6 +136,7 @@ function recordSyncedGrade(studentId, assignmentId, score, comment = '') {
     studentId,           // Student ID
     assignmentId         // Assignment ID
   ]);
+  console.timeEnd && console.timeEnd('gradeSheetAppend');
 
   // Add lookup formulas for the new row
   const newRow = sheet.getLastRow();

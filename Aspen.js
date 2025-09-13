@@ -1,4 +1,4 @@
-/* Aspen.js Last Update 2025-09-12 15:32 <37577eaba6380040d25971277c71f819f368b79cdf7b9398ff781b727d14f570>
+/* Aspen.js Last Update 2025-09-13 12:11 <3bea24e38668616b3079dd180da45b5a522a8881279cdd98e074e632a7887eac>
 /**
  * @typedef {import('./types').User} User
  * @typedef {import('./types').Course} Course  
@@ -121,6 +121,16 @@ function aspenInterface() {
     return json;
   }
 
+  // In-memory, per-execution caches to avoid redundant API calls during a single run
+  /** @type {Record<string, User>} */
+  const memoTeacherByEmail = {};
+  /** @type {Record<string, import('./types').Course[]>} */
+  const memoCoursesByTeacherId = {};
+  /** @type {Record<string, boolean>} */
+  const memoCourseAccess = {};
+  /** @type {Record<string, string>} */
+  const memoLineItemClassId = {};
+
   /**
    * @returns {User[]}
    */
@@ -157,20 +167,37 @@ function aspenInterface() {
       // override -- local testing environment
       return true;
     }
-    let authorizedEmail = Session.getActiveUser().getEmail();
-    let authorizedTeacher = fetchTeacherByEmail(authorizedEmail);
-    let authorizedCourses = fetchAspenCourses(authorizedTeacher);
-    if (authorizedCourses.find((course) => course.sourcedId == courseId)) {
-      return true;
-    } else {
+
+    // Fast path: memoized decision for this courseId
+    if (Object.prototype.hasOwnProperty.call(memoCourseAccess, courseId)) {
+      return !!memoCourseAccess[courseId];
+    }
+
+    const authorizedEmail = Session.getActiveUser().getEmail();
+    const authorizedTeacher = fetchTeacherByEmail(authorizedEmail); // will use memo
+    const authorizedCourses = fetchAspenCourses(authorizedTeacher); // will use memo
+
+    // Build a set of allowed course IDs and cache per course
+    let allowed = false;
+    for (let i = 0; i < authorizedCourses.length; i++) {
+      const cid = authorizedCourses[i].sourcedId;
+      memoCourseAccess[cid] = true;
+      if (cid === courseId) allowed = true;
+    }
+
+    if (!allowed) {
       console.error(
         "Teacher",
         authorizedTeacher,
         "does not have access to course",
         courseId
       );
-      return false;
     }
+    // Cache negative as well to avoid repeat lookups
+    if (!Object.prototype.hasOwnProperty.call(memoCourseAccess, courseId)) {
+      memoCourseAccess[courseId] = allowed;
+    }
+    return allowed;
   }
 
   /**
@@ -182,7 +209,12 @@ function aspenInterface() {
       // override -- local testing environment
       return true;
     }
-    // We don't trust that the lineItem is what it says it is, so let's fetch it...
+    // If previously resolved, reuse cached classId
+    const cachedClassId = memoLineItemClassId[lineItemId];
+    if (cachedClassId) {
+      return hasAccessToCourse(cachedClassId);
+    }
+    // Otherwise fetch once, then memoize mapping
     const url = `https://ma-innovation.myfollett.com/ims/oneroster/v1p1/lineItems/${lineItemId}`;
     const accessToken = getAccessToken();
     const response = UrlFetchApp.fetch(url, {
@@ -193,8 +225,9 @@ function aspenInterface() {
       },
     });
     const data = JSON.parse(response.getContentText());
-    let lineItem = data.lineItem;
-    let courseId = lineItem.class.sourcedId;
+    const lineItem = data.lineItem;
+    const courseId = lineItem.class.sourcedId;
+    memoLineItemClassId[lineItemId] = courseId;
     return hasAccessToCourse(courseId);
   }
 
@@ -203,6 +236,9 @@ function aspenInterface() {
    * @returns {User}
    */
   function fetchTeacherByEmail(email) {
+    if (memoTeacherByEmail[email]) {
+      return memoTeacherByEmail[email];
+    }
     const accessToken = getAccessToken();
     const url = `https://ma-innovation.myfollett.com/ims/oneroster/v1p1/teachers?filter=email=${email}`;
     const response = UrlFetchApp.fetch(url, {
@@ -215,7 +251,9 @@ function aspenInterface() {
 
     const data = JSON.parse(response.getContentText());
     console.log("Got one teacher data: ", data.users);
-    return data.users[0];
+    const teacher = data.users[0];
+    if (teacher) memoTeacherByEmail[email] = teacher;
+    return teacher;
   }
 
   /**
@@ -240,6 +278,9 @@ function aspenInterface() {
     }
     const accessToken = getAccessToken();
     const teacherId = teacher.sourcedId;
+    if (memoCoursesByTeacherId[teacherId]) {
+      return memoCoursesByTeacherId[teacherId];
+    }
     const url = `https://ma-innovation.myfollett.com/ims/oneroster/v1p1/teachers/${teacherId}/classes?limit=100&offset=0&orderBy=asc`;
 
     const response = UrlFetchApp.fetch(url, {
@@ -252,7 +293,8 @@ function aspenInterface() {
 
     const data = JSON.parse(response.getContentText());
     console.log("Courses fetched: ", data.classes);
-    return data.classes;
+    memoCoursesByTeacherId[teacherId] = data.classes || [];
+    return memoCoursesByTeacherId[teacherId];
   }
 
   /**
@@ -450,14 +492,24 @@ function aspenInterface() {
    * @returns {any}
    */
   function postResult(resultId, resultData) {
-    let lineItemId = resultData.result.lineItem.sourcedId;
-    if (!hasAccessToLineItem(lineItemId)) {
+    console.time && console.time('authCheck');
+    const lineItemId = resultData.result.lineItem.sourcedId;
+    // Prefer using classId hint provided by caller to skip an extra GET
+    const classIdFromPayload = resultData._classId;
+    const authorized = classIdFromPayload
+      ? hasAccessToCourse(classIdFromPayload)
+      : hasAccessToLineItem(lineItemId);
+    console.timeEnd && console.timeEnd('authCheck');
+    if (!authorized) {
       throw new Error("Unauthorized access to line item data");
     }
 
     const accessToken = getAccessToken();
     const url = `https://ma-innovation.myfollett.com/ims/oneroster/v1p1/results/${resultId}`;
 
+    console.time && console.time('putResult');
+    // Remove private hint before sending
+    try { delete resultData._classId; } catch (e) { }
     const response = UrlFetchApp.fetch(url, {
       method: "PUT",
       headers: {
@@ -467,6 +519,7 @@ function aspenInterface() {
       },
       payload: JSON.stringify(resultData),
     });
+    console.timeEnd && console.timeEnd('putResult');
 
     if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
       if (typeof logApiCall !== "undefined") {
@@ -480,6 +533,16 @@ function aspenInterface() {
     }
 
     const data = JSON.parse(response.getContentText());
+    // Memoize lineItem->class mapping to speed later checks in same execution
+    try {
+      const li = data && data.result && data.result.lineItem;
+      if (li && li.sourcedId) {
+        const cid = (li.class && li.class.sourcedId) || classIdFromPayload;
+        if (cid) memoLineItemClassId[li.sourcedId] = cid;
+      }
+    } catch (e) {
+      // ignore memo failures
+    }
     if (typeof logApiCall !== "undefined") {
       logApiCall({
         method: "PUT",
@@ -508,6 +571,12 @@ function aspenInterface() {
         comment: comment,
       },
     };
+    // Provide private classId hint for auth optimization (not sent to API)
+    try {
+      if (lineItem && lineItem.class && lineItem.class.sourcedId) {
+        resultObject._classId = lineItem.class.sourcedId;
+      }
+    } catch (e) { }
     let data = postResult(id, resultObject);
     return data;
   }
