@@ -1,5 +1,7 @@
-/* AspenAssignments.js Last Update 2025-09-13 08:53 <736c8606f9bff3303c915419c26fd339d038713a4e1524d6b057c07c6b14fd02>
+/* AspenAssignments.js Last Update 2025-09-13 09:00 <6a7116f8ebee6a3ac8109ae3264bc4a6a7b1742fffdac4e5de6ed526e0e0724f>
 // filepath: /Users/thinkle/BackedUpProjects/gas/standards-based-grading-sheet/AspenAssignments.js
+
+/* global SpreadsheetApp, createAssignmentId, createAssignmentTitle, getAspenClassConfig, createLineItem */
 
 /* Sheet and manager code for Aspen assignments */
 /**

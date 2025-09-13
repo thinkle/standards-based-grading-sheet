@@ -1,0 +1,17 @@
+{
+  "env": {
+    "browser": true,
+    "es6": true,
+    "googleappsscript/googleappsscript": true
+  },
+  "extends": ["eslint:recommended"],
+  "plugins": ["googleappsscript"],
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "script"
+  },
+  "rules": {
+    "no-unused-vars": ["error", { "args": "none" }],
+    "no-undef": "error"
+  }
+}
