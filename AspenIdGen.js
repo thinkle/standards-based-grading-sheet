@@ -1,4 +1,4 @@
-/* AspenIdGen.js Last Update 2025-09-13 12:51 <517c155fca594a2e28131adcb11852e219893c6b77b4973234c3fd44754cd1b8>
+/* AspenIdGen.js Last Update 2025-09-13 12:57 <1cd81e3ba9cb5659856c5bacae27c59f1ff60b240da2eec5d128b607c51f3098>
 // filepath: /Users/thinkle/BackedUpProjects/gas/standards-based-grading-sheet/AspenIdGen.js
 
 /* A module for generating IDs for Aspen Assignments from our skill #/name combos */
@@ -234,7 +234,7 @@ function createAssignmentTitle(unit, skillNum, descriptor) {
     descriptor = '';
   }
 
-  const unitDisplay = String(unit || '').replace(/\bunit\\s*/i, '').trim() || unit;
+  const unitDisplay = String(unit || '').replace(/\bunit\b\s*/i, '').trim() || unit;
   const rawSkill = String(skillNum || '').trim();
   const isUnitAverage = /^unit\s*average$/i.test(rawSkill);
   // For "Unit Average", use a compact skill label and set a readable descriptor
